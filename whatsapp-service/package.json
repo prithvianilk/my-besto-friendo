@@ -1,5 +1,5 @@
 {
-  "name": "whatsapp-message-receiver",
+  "name": "whatsapp-service",
   "private": true,
   "type": "module",
   "devDependencies": {

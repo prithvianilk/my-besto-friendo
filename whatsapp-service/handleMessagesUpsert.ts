@@ -1,10 +1,11 @@
-import type { BaileysEventMap } from 'baileys'
+import type { BaileysEventMap, WAMessage } from 'baileys'
 
 interface Message {
     participantMobileNumber: string;
     senderName: string;
     fromMe: boolean;
-    content: string
+    content: string;
+    sentAt: Date
 }
 
 const messagesStore: Message[] = []
@@ -24,14 +25,23 @@ export function handleMessagesUpsert(update: BaileysEventMap['messages.upsert'])
 
         const content = (replyMessageContent || regularMessageContent)!;
 
+        const sentAt = getSentAt(message);
+
         messagesStore.push({
             participantMobileNumber,
             senderName,
             fromMe,
-            content
+            content,
+            sentAt
         })
 
         console.log(messagesStore)
     })
+}
+
+function getSentAt(message: WAMessage) {
+    const sentAt = new Date();
+    sentAt.setUTCSeconds(message.messageTimestamp as number);
+    return sentAt;
 }
 
