@@ -2,8 +2,13 @@ import makeWASocket, { useMultiFileAuthState } from 'baileys'
 import P from 'pino'
 import { handleConnectionUpdate } from './handleConnectionUpdate.js'
 import { handleMessagesUpsert } from './handleMessagesUpsert.js'
+import { KafkaProducer, MessageProducer } from './producer.js'
+
+// TODO: Configure brokers
+const messageProducer: MessageProducer = await KafkaProducer.getProducer([]);
 
 async function initialiseSocket() {
+    // TODO: Fix before deployment
     const { state, saveCreds } = await useMultiFileAuthState('auth')
 
     const sock = makeWASocket({
@@ -18,7 +23,7 @@ async function initialiseSocket() {
     })
 
     sock.ev.on('messages.upsert', async (update) => {
-        handleMessagesUpsert(update)
+        await handleMessagesUpsert(update, messageProducer)
     })
 }
 

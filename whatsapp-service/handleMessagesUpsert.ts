@@ -1,6 +1,7 @@
-import type { BaileysEventMap, WAMessage } from 'baileys'
+import type { BaileysEventMap } from 'baileys'
+import { MessageProducer } from './producer.js'
 
-interface Message {
+export interface Message {
     participantMobileNumber: string;
     senderName: string;
     fromMe: boolean;
@@ -8,40 +9,39 @@ interface Message {
     sentAt: Date
 }
 
-const messagesStore: Message[] = []
-
-export function handleMessagesUpsert(update: BaileysEventMap['messages.upsert']) {
+export async function handleMessagesUpsert(
+    update: BaileysEventMap['messages.upsert'],
+    messageProducer: MessageProducer) {
     if (update.type !== 'notify') {
         return
     }
 
-    update.messages.forEach((message) => {
-        const participantMobileNumber = message.key.remoteJid?.slice(0, 12).slice(-10)!
-        const senderName = message.pushName!;
-        const fromMe = message.key.fromMe!;
+    await Promise.all(
+        update.messages.map(async (rawMessage) => {
+            const sentAt = new Date((rawMessage.messageTimestamp as number) * 1000);
+            const participantMobileNumber = rawMessage.key.remoteJid?.slice(0, 12).slice(-10)!
+            const senderName = rawMessage.pushName!;
+            const fromMe = rawMessage.key.fromMe!;
 
-        const replyMessageContent = message.message?.extendedTextMessage?.text;
-        const regularMessageContent = message.message?.conversation;
+            const replyMessageContent = rawMessage.message?.extendedTextMessage?.text;
+            const regularMessageContent = rawMessage.message?.conversation;
+            const content = (replyMessageContent || regularMessageContent)!;
 
-        const content = (replyMessageContent || regularMessageContent)!;
+            const message: Message = {
+                participantMobileNumber,
+                senderName,
+                fromMe,
+                content,
+                sentAt
+            }
 
-        const sentAt = getSentAt(message);
-
-        messagesStore.push({
-            participantMobileNumber,
-            senderName,
-            fromMe,
-            content,
-            sentAt
+            try {
+                await messageProducer.publish(message);
+            } catch (error) {
+                // TODO: Handle this?
+                console.error('Failed to publish message to Kafka:', error)
+            }
         })
-
-        console.log(messagesStore)
-    })
-}
-
-function getSentAt(message: WAMessage) {
-    const sentAt = new Date();
-    sentAt.setUTCSeconds(message.messageTimestamp as number);
-    return sentAt;
+    )
 }
 
