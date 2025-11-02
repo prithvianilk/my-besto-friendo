@@ -1,13 +1,16 @@
 import type { BaileysEventMap } from 'baileys'
 import { MessageProducer } from './producer.js'
+import z from 'zod';
 
-export interface Message {
-    participantMobileNumber: string;
-    senderName: string;
-    fromMe: boolean;
-    content: string;
-    sentAt: Date
-}
+export const Message = z.object({
+    participantMobileNumber: z.string(),
+    senderName: z.string(),
+    fromMe: z.boolean(),
+    content: z.string(),
+    sentAt: z.date(),
+})
+
+export type Message = z.infer<typeof Message>
 
 export async function handleMessagesUpsert(
     update: BaileysEventMap['messages.upsert'],
@@ -27,15 +30,16 @@ export async function handleMessagesUpsert(
             const regularMessageContent = rawMessage.message?.conversation;
             const content = (replyMessageContent || regularMessageContent)!;
 
-            const message: Message = {
-                participantMobileNumber,
-                senderName,
-                fromMe,
-                content,
-                sentAt
-            }
-
             try {
+                const message = Message.parse({
+                    participantMobileNumber,
+                    senderName,
+                    fromMe,
+                    content,
+                    sentAt
+                })
+
+                console.log("Parsed message: " + message);
                 await messageProducer.publish(message);
             } catch (error) {
                 // TODO: Handle this?

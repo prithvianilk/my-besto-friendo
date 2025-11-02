@@ -4,8 +4,7 @@ import { handleConnectionUpdate } from './handleConnectionUpdate.js'
 import { handleMessagesUpsert } from './handleMessagesUpsert.js'
 import { KafkaProducer, MessageProducer } from './producer.js'
 
-// TODO: Configure brokers
-const messageProducer: MessageProducer = await KafkaProducer.getProducer([]);
+const messageProducer: MessageProducer = await KafkaProducer.initProducer(["localhost:9094"]);
 
 async function initialiseSocket() {
     // TODO: Fix before deployment

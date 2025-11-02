@@ -8,7 +8,7 @@ export interface MessageProducer {
 export class KafkaProducer implements MessageProducer {
     private producer: Producer;
 
-    public static async getProducer(brokers: string[]): Promise<KafkaProducer> {
+    public static async initProducer(brokers: string[]): Promise<KafkaProducer> {
         const producer = await new Kafka({ clientId: "whatsapp-service", brokers }).producer();
         producer.connect();
         return new KafkaProducer(producer);
