@@ -12,6 +12,15 @@ export const Message = z.object({
 
 export type Message = z.infer<typeof Message>;
 
+const whitelistedParticipantMobileNumbers: string[] =
+    process.env.WHITELISTED_PARTICIPANT_MOBILE_NUMBERS?.split(',')
+        .map((num) => num.trim())
+        .filter(Boolean) ?? [];
+
+function isWhitelisted(participantMobileNumber: string): boolean {
+    return whitelistedParticipantMobileNumbers.includes(participantMobileNumber);
+}
+
 export async function handleMessagesUpsert(
     update: BaileysEventMap['messages.upsert'],
     messageProducer: MessageProducer
@@ -22,9 +31,14 @@ export async function handleMessagesUpsert(
 
     await Promise.all(
         update.messages.map(async (rawMessage) => {
-            console.log('Raw message', rawMessage);
             const sentAt = new Date((rawMessage.messageTimestamp as number) * 1000);
             const participantMobileNumber = rawMessage.key.remoteJid?.slice(0, 12).slice(-10)!;
+
+            if (!isWhitelisted(participantMobileNumber)) {
+                console.log('Skipping message from non-whitelisted number');
+                return;
+            }
+
             const senderName = rawMessage.pushName!;
             const fromMe = rawMessage.key.fromMe!;
 
