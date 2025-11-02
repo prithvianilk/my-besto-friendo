@@ -3,7 +3,7 @@
 - This is yet another personal assistant app
 - The main focus here is an always-on AI assistant that uses WhatsApp as a distribution channel
 
-# Long-Term Vision
+# Long-Term Vision/
 
 ## Features
 
