@@ -66,10 +66,10 @@ public class CommitmentRecorderWhatsAppMessageService extends WhatsAppMessageSer
                 
                 Review the conversation and determine if any commitments were made.
                 If a commitment is found, extract:
-                - committedAt: The timestamp when the commitment was made
+                - committedAt: The timestamp when the commitment was made. Expected format: 2025-11-03T17:00:00Z
                 - description: A brief description of the commitment
                 - participant: The name of the person who made the commitment
-                - toBeCompletedAt: The timestamp when the user committed to complete the task (e.g., if they say "I'll meet you for dinner at 5pm tomorrow", this would be tomorrow at 5pm with the appropriate date)
+                - toBeCompletedAt: The timestamp when the user committed to complete the task (e.g., if they say "I'll meet you for dinner at 5pm tomorrow", this would be tomorrow at 5pm with the appropriate date). Expected format: 2025-11-03T17:00:00Z
                 
                 Set isCommitment to true if a commitment is found, false otherwise.
                 If no commitment is found, the commitment object can be null.
