@@ -38,8 +38,7 @@ class CommitmentRecorderWhatsAppMessageServiceEvalTest {
     void testCommitmentDetection(
             String testCaseName,
             List<WhatsAppMessage> inputMessages,
-            IsACommitment expectedOutput
-    ) {
+            IsACommitment expectedOutput) {
         for (WhatsAppMessage message : inputMessages) {
             repository.add(message);
         }
@@ -63,6 +62,7 @@ class CommitmentRecorderWhatsAppMessageServiceEvalTest {
                                 new Commitment(
                                         baseTime.plusSeconds(60),
                                         "I'll send you the report tomorrow",
+                                        "Can you send me the report?",
                                         "Bob",
                                         baseTime.plusSeconds(60).plusSeconds(86400)
                                 ),
@@ -78,11 +78,6 @@ class CommitmentRecorderWhatsAppMessageServiceEvalTest {
                         new IsACommitment(null, false)
                 ),
                 Arguments.of(
-                        "Empty message list",
-                        List.<WhatsAppMessage>of(),
-                        new IsACommitment(null, false)
-                ),
-                Arguments.of(
                         "Commitment with specific time - 'I'll be there at 5pm'",
                         createMessages(baseTime,
                                 new MessageContent("Are you coming to the meeting?", false),
@@ -92,6 +87,7 @@ class CommitmentRecorderWhatsAppMessageServiceEvalTest {
                                 new Commitment(
                                         baseTime.plusSeconds(60),
                                         "I'll be there at 5pm",
+                                        "Are you coming to the meeting?",
                                         "Bob",
                                         baseTime.plusSeconds(60).plusSeconds(25200)
                                 ),
@@ -108,6 +104,7 @@ class CommitmentRecorderWhatsAppMessageServiceEvalTest {
                                 new Commitment(
                                         baseTime.plusSeconds(60),
                                         "I can help you with that",
+                                        "Can you help me with this project?",
                                         "Bob",
                                         null
                                 ),

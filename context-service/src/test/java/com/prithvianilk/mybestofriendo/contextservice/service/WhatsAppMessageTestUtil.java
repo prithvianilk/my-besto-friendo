@@ -14,7 +14,8 @@ public class WhatsAppMessageTestUtil {
     private static final String DEFAULT_OTHER_NAME = "Alice";
     private static final int DEFAULT_TIME_INCREMENT_SECONDS = 60;
 
-    public record MessageContent(String content, boolean fromMe) {}
+    public record MessageContent(String content, boolean fromMe) {
+    }
 
     public static List<WhatsAppMessage> createMessages(Instant baseTime, MessageContent... messages) {
         List<WhatsAppMessage> result = new ArrayList<>();
