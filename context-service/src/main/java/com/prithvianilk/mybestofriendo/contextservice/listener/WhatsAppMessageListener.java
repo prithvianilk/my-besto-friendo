@@ -22,6 +22,8 @@ public class WhatsAppMessageListener {
     public void listen(WhatsAppMessage message) {
         log.info("Received WhatsApp message: {}", message);
         repository.add(message);
-        services.forEach(WhatsAppMessageService::onNewWhatsAppMessage);
+        for (WhatsAppMessageService service : services) {
+            service.onNewWhatsAppMessage(message);
+        }
     }
 }
