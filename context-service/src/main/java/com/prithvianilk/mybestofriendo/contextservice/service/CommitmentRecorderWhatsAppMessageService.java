@@ -104,6 +104,7 @@ public class CommitmentRecorderWhatsAppMessageService extends WhatsAppMessageSer
                 Here, the second message is a commitment.
                 
                 Review the conversation and determine if any commitments were made in the latest message.
+                
                 If a commitment is found, extract:
                 - committedAt: The timestamp when the commitment was made. Expected format: 2025-11-03T17:00:00Z
                 - description: A brief description of the commitment.
@@ -114,7 +115,16 @@ public class CommitmentRecorderWhatsAppMessageService extends WhatsAppMessageSer
                   - If a date is not mentioned and a category is also not mentioned, take the time as 12PM.
                 - commitmentMessageContent: The content of the message where the original commitment was asked for.
                   - e.g., if they say "I'll meet you for dinner at 5pm tomorrow", the message content is "I'll meet you for dinner at 5pm tomorrow"
-                  - This is not the reply or acknowledgement message, but rather the original message that started the commitment
+                  - This is not the reply or acknowledgement message, but rather the original message that started the commitment.
+                    - For ex, in the conversation:
+                    - "[person 1] Are you coming to the meeting?"
+                    - "[person 2] Yess, give me 2 minutes"
+                    - The message "Are you coming to the meeting?" is the commitmentMessageContent. NOT "Yess, give me 2 minutes", remember, that is the reply.
+                
+                    - ex 2:
+                    - "[person 1] Can you help me fix this bug?"
+                    - "[person 2] Busy today. Lets connect tmmrw?"
+                    - The message "Can you help me fix this bug?" is the commitmentMessageContent. NOT "Busy today. Lets connect tmmrw?", remember, that is the reply.
                 
                 Set isCommitment to true if a commitment is found, false otherwise.
                 If no commitment is found, the commitment object can be null.

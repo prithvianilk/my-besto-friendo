@@ -1,8 +1,10 @@
 package com.prithvianilk.mybestofriendo.contextservice.service;
 
 import com.prithvianilk.mybestofriendo.contextservice.model.Commitment;
+import com.prithvianilk.mybestofriendo.contextservice.model.CommitmentEntity;
 import com.prithvianilk.mybestofriendo.contextservice.model.IsACommitment;
 import com.prithvianilk.mybestofriendo.contextservice.model.WhatsAppMessage;
+import com.prithvianilk.mybestofriendo.contextservice.repository.CommitmentRepository;
 import com.prithvianilk.mybestofriendo.contextservice.repository.WhatsAppMessageRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -17,7 +19,7 @@ import java.util.stream.Stream;
 
 import static com.prithvianilk.mybestofriendo.contextservice.service.WhatsAppMessageTestUtil.MessageContent;
 import static com.prithvianilk.mybestofriendo.contextservice.service.WhatsAppMessageTestUtil.createMessages;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.*;
 
 @SpringBootTest
 class CommitmentRecorderWhatsAppMessageServiceEvalTest {
@@ -28,9 +30,13 @@ class CommitmentRecorderWhatsAppMessageServiceEvalTest {
     @Autowired
     private WhatsAppMessageRepository repository;
 
+    @Autowired
+    private CommitmentRepository commitmentRepository;
+
     @BeforeEach
     void setUp() {
         repository.getMessages().clear();
+        commitmentRepository.deleteAll();
     }
 
     @ParameterizedTest(name = "{0}")
@@ -46,6 +52,28 @@ class CommitmentRecorderWhatsAppMessageServiceEvalTest {
         service.onNewWhatsAppMessage(inputMessages.getLast());
 
         assertNotNull(expectedOutput);
+
+        List<CommitmentEntity> actualCommitments = commitmentRepository.findAll();
+        int actualCount = actualCommitments.size();
+        int expectedCount = expectedOutput.isCommitment() ? 1 : 0;
+        assertEquals(expectedCount, actualCount,
+                String.format("Expected %d commitment(s) in repository, but found %d", expectedCount, actualCount));
+
+        if (!expectedOutput.isCommitment() || expectedOutput.commitment() == null) {
+            return;
+        }
+
+        Commitment expectedCommitment = expectedOutput.commitment();
+        CommitmentEntity actualCommitmentEntity = actualCommitments.getFirst();
+
+//        assertEquals(expectedCommitment.committedAt(), actualCommitmentEntity.getCommittedAt(),
+//                "CommittedAt timestamp mismatch");
+        assertEquals(expectedCommitment.commitmentMessageContent(), actualCommitmentEntity.getCommitmentMessageContent(),
+                "Commitment message content mismatch");
+        assertEquals(expectedCommitment.participant(), actualCommitmentEntity.getParticipant(),
+                "Participant mismatch");
+//        assertEquals(expectedCommitment.toBeCompletedAt(), actualCommitmentEntity.getToBeCompletedAt(),
+//                "ToBeCompletedAt timestamp mismatch");
     }
 
     static Stream<Arguments> testCases() {
