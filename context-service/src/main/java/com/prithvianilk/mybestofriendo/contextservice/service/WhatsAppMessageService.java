@@ -1,5 +1,6 @@
 package com.prithvianilk.mybestofriendo.contextservice.service;
 
+import com.prithvianilk.mybestofriendo.contextservice.model.WhatsAppMessage;
 import com.prithvianilk.mybestofriendo.contextservice.repository.WhatsAppMessageRepository;
 import lombok.RequiredArgsConstructor;
 
@@ -7,5 +8,5 @@ import lombok.RequiredArgsConstructor;
 public abstract class WhatsAppMessageService {
     protected final WhatsAppMessageRepository repository;
 
-    public abstract void onNewWhatsAppMessage();
+    public abstract void onNewWhatsAppMessage(WhatsAppMessage message);
 }
