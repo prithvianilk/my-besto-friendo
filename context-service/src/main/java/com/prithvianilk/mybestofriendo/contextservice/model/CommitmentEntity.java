@@ -7,10 +7,11 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.Instant;
+import java.util.Objects;
 
 @Entity
 @Table(name = "commitment", indexes = {
-    @Index(name = "idx_commitment_unique", columnList = "committed_at, participant, commitment_message_content", unique = true)
+    @Index(name = "idx_commitment_unique", columnList = "committed_at, participant", unique = true)
 })
 @Data
 @NoArgsConstructor
@@ -33,15 +34,12 @@ public class CommitmentEntity {
     @Column(name = "to_be_completed_at")
     private Instant toBeCompletedAt;
 
-    @Column(name = "commitment_message_content", length = 2000)
-    private String commitmentMessageContent;
-
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
     @PrePersist
     protected void onCreate() {
-        if (createdAt == null) {
+        if (Objects.isNull(createdAt)) {
             createdAt = Instant.now();
         }
     }

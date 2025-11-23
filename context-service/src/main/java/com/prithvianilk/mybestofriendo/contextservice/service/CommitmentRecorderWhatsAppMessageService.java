@@ -2,16 +2,22 @@ package com.prithvianilk.mybestofriendo.contextservice.service;
 
 import com.prithvianilk.mybestofriendo.contextservice.mapper.CommitmentMapper;
 import com.prithvianilk.mybestofriendo.contextservice.model.Commitment;
-import com.prithvianilk.mybestofriendo.contextservice.model.IsACommitment;
+import com.prithvianilk.mybestofriendo.contextservice.model.CommitmentAction;
+import com.prithvianilk.mybestofriendo.contextservice.model.CommitmentEntity;
 import com.prithvianilk.mybestofriendo.contextservice.model.WhatsAppMessage;
 import com.prithvianilk.mybestofriendo.contextservice.repository.CommitmentRepository;
 import com.prithvianilk.mybestofriendo.contextservice.repository.WhatsAppMessageRepository;
+import jakarta.validation.ConstraintViolation;
+import jakarta.validation.Validator;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.stereotype.Service;
 
+import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -22,48 +28,100 @@ public class CommitmentRecorderWhatsAppMessageService extends WhatsAppMessageSer
     private final ChatClient chatClient;
     private final CommitmentRepository commitmentRepository;
     private final CommitmentMapper mapper;
+    private final Validator validator;
 
     public CommitmentRecorderWhatsAppMessageService(
             WhatsAppMessageRepository repository,
             CommitmentRepository commitmentRepository,
             ChatClient chatClient,
-            CommitmentMapper mapper) {
+            CommitmentMapper mapper,
+            Validator validator) {
         super(repository);
         this.chatClient = chatClient;
         this.commitmentRepository = commitmentRepository;
         this.mapper = mapper;
+        this.validator = validator;
     }
 
     @Override
     public void onNewWhatsAppMessage(WhatsAppMessage message) {
         String messageHistorySnapshot = buildMessageHistorySnapshot();
-        String prompt = buildCommitmentDetectionPrompt(messageHistorySnapshot);
-        IsACommitment response = chatClient.prompt()
+        String futureCommitmentsSnapshot = buildFutureCommitmentsSnapshot();
+        String prompt = buildCommitmentDetectionPrompt(messageHistorySnapshot, futureCommitmentsSnapshot);
+        CommitmentAction response = chatClient.prompt()
                 .user(prompt)
                 .call()
-                .entity(IsACommitment.class);
+                .entity(CommitmentAction.class);
 
-        log.info("Commitment detection response: {}", response);
+        log.info("Commitment action response: {}", response);
 
-        if (!response.isCommitment()) {
+        if (Objects.isNull(response)) {
+            return;
+        }
+
+        Set<ConstraintViolation<CommitmentAction>> violations = validator.validate(response);
+        if (!violations.isEmpty()) {
+            log.warn("Commitment action validation failed: {}", violations);
             return;
         }
 
         Commitment commitment = response.commitment();
 
-        if (commitmentExists(commitment)) {
-            log.info("Commitment already exists, skipping save: {}", commitment);
-            return;
+        switch (response.type()) {
+            case CREATE -> {
+                commitmentRepository.save(mapper.toEntity(commitment));
+                log.info("Created new commitment: {}", commitment);
+            }
+            case CHANGE -> {
+                if (Objects.isNull(response.id())) {
+                    log.warn("Cannot change commitment - ID is required for CHANGE action: {}", commitment);
+                    return;
+                }
+                commitmentRepository.findById(response.id()).ifPresentOrElse(
+                        existingCommitment -> {
+                            updateCommitmentEntity(existingCommitment, commitment);
+                            commitmentRepository.save(existingCommitment);
+                            log.info("Updated commitment: {}", commitment);
+                        },
+                        () -> log.warn("Cannot change commitment - not found with ID: {}", response.id())
+                );
+            }
+            case CANCEL -> {
+                if (Objects.isNull(response.id())) {
+                    log.warn("Cannot cancel commitment - ID is required for CANCEL action: {}", commitment);
+                    return;
+                }
+                commitmentRepository.findById(response.id()).ifPresentOrElse(
+                        existingCommitment -> {
+                            commitmentRepository.delete(existingCommitment);
+                            log.info("Cancelled commitment: {}", commitment);
+                        },
+                        () -> log.warn("Cannot cancel commitment - not found with ID: {}", response.id())
+                );
+            }
         }
-
-        commitmentRepository.save(mapper.toEntity(commitment));
     }
 
-    private boolean commitmentExists(Commitment commitment) {
-        return commitmentRepository.existsByToBeCompletedAtAndParticipantAndCommitmentMessageContent(
-                commitment.toBeCompletedAt(),
-                commitment.participant(),
-                commitment.commitmentMessageContent());
+
+    private String buildFutureCommitmentsSnapshot() {
+        Instant now = Instant.now();
+        return commitmentRepository
+                .findAll()
+                .stream()
+                .filter(entity -> Objects.nonNull(entity.getToBeCompletedAt()) &&
+                        entity.getToBeCompletedAt().isAfter(now))
+                .map(entity -> String.format("ID:%d|Participant:%s|Description:%s|ToBeCompletedAt:%s",
+                        entity.getId(),
+                        entity.getParticipant(),
+                        entity.getDescription(),
+                        entity.getToBeCompletedAt()))
+                .collect(Collectors.joining(" || "));
+    }
+
+    private void updateCommitmentEntity(CommitmentEntity entity, Commitment commitment) {
+        entity.setCommittedAt(commitment.committedAt());
+        entity.setDescription(commitment.description());
+        entity.setToBeCompletedAt(commitment.toBeCompletedAt());
     }
 
     private String buildMessageHistorySnapshot() {
@@ -80,9 +138,9 @@ public class CommitmentRecorderWhatsAppMessageService extends WhatsAppMessageSer
         return String.format("[%s] %s: %s", formattedTime, message.senderName(), message.content());
     }
 
-    private String buildCommitmentDetectionPrompt(String messageSnapshot) {
+    private String buildCommitmentDetectionPrompt(String messageSnapshot, String futureCommitmentsSnapshot) {
         return """
-                Analyze the following conversation to identify commitments made by the user.
+                Analyze the following conversation to identify commitments made by the user and determine the appropriate action.
                 
                 A commitment is a statement where the user explicitly or implicitly promises to:
                 - Perform a specific action in the future
@@ -103,35 +161,50 @@ public class CommitmentRecorderWhatsAppMessageService extends WhatsAppMessageSer
                 
                 Here, the second message is a commitment.
                 
-                Review the conversation and determine if any commitments were made in the latest message.
+                Review the conversation and determine the action type for the latest message:
                 
-                If a commitment is found, extract:
-                - committedAt: The timestamp when the commitment was made. Expected format: 2025-11-03T17:00:00Z
-                - description: A brief description of the commitment.
-                - participant: The name of the person who made the commitment
-                - toBeCompletedAt:
-                  - The timestamp when the user committed to complete the task (e.g., if they say "I'll meet you for dinner at 5pm tomorrow", this would be tomorrow at 5pm with the appropriate date). Expected format: 2025-11-03T17:00:00Z
-                  - If a date is not mentioned, but a category of day is mentioned (morning, evening, etc), take morning as 9AM, afternoon as 1PM, evening as 4PM, night as 7PM.
-                  - If a date is not mentioned and a category is also not mentioned, take the time as 12PM.
-                - commitmentMessageContent: The content of the message where the original commitment was asked for.
-                  - e.g., if they say "I'll meet you for dinner at 5pm tomorrow", the message content is "I'll meet you for dinner at 5pm tomorrow"
-                  - This is not the reply or acknowledgement message, but rather the original message that started the commitment.
-                    - For ex, in the conversation:
-                    - "[person 1] Are you coming to the meeting?"
-                    - "[person 2] Yess, give me 2 minutes"
-                    - The message "Are you coming to the meeting?" is the commitmentMessageContent. NOT "Yess, give me 2 minutes", remember, that is the reply.
+                Action Types:
+                1. CREATE: A new commitment is being made that doesn't modify or cancel an existing one.
+                   - IMPORTANT: Before using CREATE, check the "Existing Future Commitments" list below.
+                   - If you find a matching commitment in that list (same participant, similar description, or similar message content), DO NOT use CREATE.
+                   - Instead, use CHANGE if the commitment is being modified, or CANCEL if it's being withdrawn.
+                   - Only use CREATE if the commitment is truly new and not found in the existing commitments list.
+                2. CHANGE: An existing commitment is being modified (e.g., changing the time, date, or details).
+                   - Examples: "Actually, let's meet at 6pm instead of 5pm", "Can we push that to next week?"
+                   - You MUST match this with an existing commitment from the "Existing Future Commitments" list below.
+                3. CANCEL: An existing commitment is being cancelled or withdrawn.
+                   - Examples: "I can't make it", "Let's cancel that", "Never mind, I won't be able to do that"
+                   - You MUST match this with an existing commitment from the "Existing Future Commitments" list below.
                 
-                    - ex 2:
-                    - "[person 1] Can you help me fix this bug?"
-                    - "[person 2] Busy today. Lets connect tmmrw?"
-                    - The message "Can you help me fix this bug?" is the commitmentMessageContent. NOT "Busy today. Lets connect tmmrw?", remember, that is the reply.
+                Existing Future Commitments:
+                The following are existing commitments that are scheduled to be completed in the future. 
+                - Use these to identify which commitment is being changed or cancelled (for CHANGE/CANCEL actions).
+                - Check this list BEFORE using CREATE to ensure you're not creating a duplicate commitment.
+                - If a commitment in the conversation matches one in this list, use CHANGE or CANCEL instead of CREATE.
+                %s
                 
-                Set isCommitment to true if a commitment is found, false otherwise.
-                If no commitment is found, the commitment object can be null.
+                If a commitment action is found, extract:
+                - type: One of CREATE, CHANGE, or CANCEL
+                - commitment:
+                  - committedAt: The timestamp when the commitment was made. Expected format: 2025-11-03T17:00:00Z
+                  - description: A brief description of the commitment. Make this an explicit mention of the commitment task to be done.
+                  - participant: The name of the person who made the commitment
+                  - toBeCompletedAt:
+                    - The timestamp when the user committed to complete the task (e.g., if they say "I'll meet you for dinner at 5pm tomorrow", this would be tomorrow at 5pm with the appropriate date). Expected format: 2025-11-03T17:00:00Z
+                    - If a date is not mentioned, but a category of day is mentioned (morning, evening, etc), take morning as 9AM, afternoon as 1PM, evening as 4PM, night as 7PM.
+                    - If a date is not mentioned and a category is also not mentioned, take the time as 12PM.
+                - id: (REQUIRED for CHANGE and CANCEL actions, null for CREATE)
+                  - For CHANGE or CANCEL actions, you MUST identify which existing commitment is being modified or cancelled.
+                  - Match the commitment from the conversation with one of the existing future commitments listed above.
+                  - Use the ID from the matching commitment in the "Existing Future Commitments" list.
+                  - If the action is CREATE, set id to null.
+                  - If the action is CHANGE or CANCEL but you cannot find a matching commitment, still set the id to null (but this will cause an error, so try your best to match it).
+                
+                If no commitment action is found, return null for both type and commitment.
                 
                 Conversation:
                 %s
                 """
-                .formatted(messageSnapshot);
+                .formatted(futureCommitmentsSnapshot, messageSnapshot);
     }
 }

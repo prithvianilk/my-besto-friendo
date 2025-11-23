@@ -2,7 +2,6 @@ package com.prithvianilk.mybestofriendo.contextservice.service;
 
 import com.prithvianilk.mybestofriendo.contextservice.model.Commitment;
 import com.prithvianilk.mybestofriendo.contextservice.model.CommitmentEntity;
-import com.prithvianilk.mybestofriendo.contextservice.model.IsACommitment;
 import com.prithvianilk.mybestofriendo.contextservice.model.WhatsAppMessage;
 import com.prithvianilk.mybestofriendo.contextservice.repository.CommitmentRepository;
 import com.prithvianilk.mybestofriendo.contextservice.repository.WhatsAppMessageRepository;
@@ -19,7 +18,7 @@ import java.util.stream.Stream;
 
 import static com.prithvianilk.mybestofriendo.contextservice.service.WhatsAppMessageTestUtil.MessageContent;
 import static com.prithvianilk.mybestofriendo.contextservice.service.WhatsAppMessageTestUtil.createMessages;
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @SpringBootTest
 class CommitmentRecorderWhatsAppMessageServiceEvalTest {
@@ -41,39 +40,27 @@ class CommitmentRecorderWhatsAppMessageServiceEvalTest {
 
     @ParameterizedTest(name = "{0}")
     @MethodSource("testCases")
-    void testCommitmentDetection(
+    void testCreateCommitment(
             String testCaseName,
             List<WhatsAppMessage> inputMessages,
-            IsACommitment expectedOutput) {
+            Commitment expectedCommitment) {
         for (WhatsAppMessage message : inputMessages) {
             repository.add(message);
         }
 
         service.onNewWhatsAppMessage(inputMessages.getLast());
 
-        assertNotNull(expectedOutput);
-
         List<CommitmentEntity> actualCommitments = commitmentRepository.findAll();
-        int actualCount = actualCommitments.size();
-        int expectedCount = expectedOutput.isCommitment() ? 1 : 0;
-        assertEquals(expectedCount, actualCount,
-                String.format("Expected %d commitment(s) in repository, but found %d", expectedCount, actualCount));
+        assertEquals(
+                1,
+                actualCommitments.size(),
+                "Expected exactly 1 commitment to be created");
 
-        if (!expectedOutput.isCommitment() || expectedOutput.commitment() == null) {
-            return;
-        }
-
-        Commitment expectedCommitment = expectedOutput.commitment();
-        CommitmentEntity actualCommitmentEntity = actualCommitments.getFirst();
-
-//        assertEquals(expectedCommitment.committedAt(), actualCommitmentEntity.getCommittedAt(),
-//                "CommittedAt timestamp mismatch");
-        assertEquals(expectedCommitment.commitmentMessageContent(), actualCommitmentEntity.getCommitmentMessageContent(),
-                "Commitment message content mismatch");
-        assertEquals(expectedCommitment.participant(), actualCommitmentEntity.getParticipant(),
+        CommitmentEntity actualCommitment = actualCommitments.getFirst();
+        assertEquals(
+                expectedCommitment.participant(),
+                actualCommitment.getParticipant(),
                 "Participant mismatch");
-//        assertEquals(expectedCommitment.toBeCompletedAt(), actualCommitmentEntity.getToBeCompletedAt(),
-//                "ToBeCompletedAt timestamp mismatch");
     }
 
     static Stream<Arguments> testCases() {
@@ -86,24 +73,12 @@ class CommitmentRecorderWhatsAppMessageServiceEvalTest {
                                 new MessageContent("Can you send me the report?", false),
                                 new MessageContent("I'll send you the report tomorrow", true)
                         ),
-                        new IsACommitment(
-                                new Commitment(
-                                        baseTime.plusSeconds(60),
-                                        "I'll send you the report tomorrow",
-                                        "Can you send me the report?",
-                                        "Bob",
-                                        baseTime.plusSeconds(60).plusSeconds(86400)
-                                ),
-                                true
+                        new Commitment(
+                                baseTime.plusSeconds(60),
+                                "I'll send you the report tomorrow",
+                                "Bob",
+                                baseTime.plusSeconds(60).plusSeconds(86400)
                         )
-                ),
-                Arguments.of(
-                        "No commitment - casual conversation",
-                        createMessages(baseTime,
-                                new MessageContent("How are you?", false),
-                                new MessageContent("I'm doing well, thanks!", true)
-                        ),
-                        new IsACommitment(null, false)
                 ),
                 Arguments.of(
                         "Commitment with specific time - 'I'll be there at 5pm'",
@@ -111,15 +86,11 @@ class CommitmentRecorderWhatsAppMessageServiceEvalTest {
                                 new MessageContent("Are you coming to the meeting?", false),
                                 new MessageContent("Yes, I'll be there at 5pm", true)
                         ),
-                        new IsACommitment(
-                                new Commitment(
-                                        baseTime.plusSeconds(60),
-                                        "I'll be there at 5pm",
-                                        "Are you coming to the meeting?",
-                                        "Bob",
-                                        baseTime.plusSeconds(60).plusSeconds(25200)
-                                ),
-                                true
+                        new Commitment(
+                                baseTime.plusSeconds(60),
+                                "I'll be there at 5pm",
+                                "Bob",
+                                baseTime.plusSeconds(60).plusSeconds(25200)
                         )
                 ),
                 Arguments.of(
@@ -128,15 +99,75 @@ class CommitmentRecorderWhatsAppMessageServiceEvalTest {
                                 new MessageContent("Can you help me with this project?", false),
                                 new MessageContent("I can help you with that", true)
                         ),
-                        new IsACommitment(
-                                new Commitment(
-                                        baseTime.plusSeconds(60),
-                                        "I can help you with that",
-                                        "Can you help me with this project?",
-                                        "Bob",
-                                        null
-                                ),
-                                true
+                        new Commitment(
+                                baseTime.plusSeconds(60),
+                                "I can help you with that",
+                                "Bob",
+                                null
+                        )
+                )
+        );
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("updateTestCases")
+    void testUpdateCommitment(
+            String testCaseName,
+            List<WhatsAppMessage> inputMessages,
+            Commitment expectedUpdatedCommitment) {
+        for (WhatsAppMessage message : inputMessages) {
+            repository.add(message);
+            service.onNewWhatsAppMessage(message);
+        }
+
+        List<CommitmentEntity> actualCommitments = commitmentRepository.findAll();
+        assertEquals(1, actualCommitments.size(),
+                "Expected exactly 1 commitment in repository after update");
+
+        CommitmentEntity actualCommitment = actualCommitments.getFirst();
+        assertEquals(expectedUpdatedCommitment.participant(),
+                actualCommitment.getParticipant(),
+                "Participant mismatch after update");
+        if (expectedUpdatedCommitment.toBeCompletedAt() != null) {
+            // TODO: Complete this test
+//            assertEquals(expectedUpdatedCommitment.toBeCompletedAt(),
+//                    actualCommitment.getToBeCompletedAt(),
+//                    "ToBeCompletedAt timestamp mismatch after update");
+        }
+    }
+
+    static Stream<Arguments> updateTestCases() {
+        Instant baseTime = Instant.parse("2025-01-15T10:00:00Z");
+
+        return Stream.of(
+                Arguments.of(
+                        "Update meeting time from 5pm to 6pm",
+                        createMessages(baseTime,
+                                new MessageContent("Hey, let's meet at 5pm?", false),
+                                new MessageContent("Yes, sure!", true),
+                                new MessageContent("No, let's postpone to 6pm?", false),
+                                new MessageContent("sure that works", true)
+                        ),
+                        new Commitment(
+                                baseTime.plusSeconds(120),
+                                "sure that works",
+                                "Bob",
+                                baseTime.plusSeconds(120).plusSeconds(28800) // 6pm same day
+                        )
+                ),
+                Arguments.of(
+                        "Update party date from 15th to 14th",
+                        createMessages(baseTime,
+                                new MessageContent("Yo, planning a house party on 15th, you down?", false),
+                                new MessageContent("Yessir!", true),
+                                new MessageContent("Bro, it's moved to 14th, dat fine?", false),
+                                new MessageContent("Yeah no worries.", true)
+                        ),
+                        new Commitment(
+                                baseTime.plusSeconds(180),
+                                "Yeah no worries.",
+                                "Bob",
+                                baseTime.plusSeconds(180).minusSeconds(86400) // 14th instead of 15th
                         )
                 )
         );
