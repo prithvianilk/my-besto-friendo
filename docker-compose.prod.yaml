@@ -1,0 +1,47 @@
+services:
+  kafka:
+    image: ${KAFKA_IMAGE:-bitnami/kafka:3.6}
+    container_name: "kafka"
+    restart: unless-stopped
+    ports:
+      - "9094:9094"
+    volumes:
+      - /home/ec2-user/app/my-besto-friendo:/app
+      - /home/ec2-user/app/my-besto-friendo/data/kafka:/bitnami/kafka
+    environment:
+      # KRaft settings
+      KAFKA_ENABLE_KRAFT: "yes"
+      KAFKA_CFG_PROCESS_ROLES: "broker,controller"
+      KAFKA_CFG_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
+      KAFKA_CFG_LISTENERS: "PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:9094"
+      KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT"
+      KAFKA_CFG_ADVERTISED_LISTENERS: "PLAINTEXT://kafka:9092,EXTERNAL://localhost:9094"
+      KAFKA_CFG_NODE_ID: 1
+      KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: "1@kafka:9093"
+      ALLOW_PLAINTEXT_LISTENER: "yes"
+      JAVA_OPTS: "-Xmx128M -Xms128M"
+    networks:
+      - app-network
+    healthcheck:
+      test: [ "CMD-SHELL", "kafka-broker-api-versions.sh -bootstrap-server kafka:9092" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 10s
+    deploy:
+      replicas: ${KAFKA_REPLICAS:-1}
+
+  nginx:
+    image: nginx:latest
+    container_name: "nginx"
+    restart: unless-stopped
+    network_mode: "host"
+    volumes:
+      - /home/ec2-user/app/my-besto-friendo/nginx/nginx.conf:/etc/nginx/nginx.conf
+      - /home/ec2-user/app/my-besto-friendo/data/nginx/.htpasswd:/etc/nginx/.htpasswd
+      - /home/ec2-user/app/my-besto-friendo/data/nginx/logs/:/var/log/nginx/
+      - /home/ec2-user/app/my-besto-friendo/frontend/dist:/etc/nginx/html
+
+networks:
+  app-network:
+    driver: bridge
