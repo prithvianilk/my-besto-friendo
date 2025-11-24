@@ -13,6 +13,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.stereotype.Service;
 
+import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -29,25 +30,31 @@ public class CommitmentRecorderWhatsAppMessageService extends WhatsAppMessageSer
     private final CommitmentRepository commitmentRepository;
     private final CommitmentMapper mapper;
     private final Validator validator;
+    private final Clock clock;
 
     public CommitmentRecorderWhatsAppMessageService(
             WhatsAppMessageRepository repository,
             CommitmentRepository commitmentRepository,
             ChatClient chatClient,
             CommitmentMapper mapper,
-            Validator validator) {
+            Validator validator,
+            Clock clock) {
         super(repository);
         this.chatClient = chatClient;
         this.commitmentRepository = commitmentRepository;
         this.mapper = mapper;
         this.validator = validator;
+        this.clock = clock;
     }
 
     @Override
     public void onNewWhatsAppMessage(WhatsAppMessage message) {
-        String messageHistorySnapshot = buildMessageHistorySnapshot();
+        String messageHistorySnapshot = buildMessageHistorySnapshot(message.participantMobileNumber());
         String futureCommitmentsSnapshot = buildFutureCommitmentsSnapshot();
         String prompt = buildCommitmentDetectionPrompt(messageHistorySnapshot, futureCommitmentsSnapshot);
+
+        log.debug("Prompt:\n{}", prompt);
+
         CommitmentAction response = chatClient.prompt()
                 .user(prompt)
                 .call()
@@ -55,13 +62,7 @@ public class CommitmentRecorderWhatsAppMessageService extends WhatsAppMessageSer
 
         log.info("Commitment action response: {}", response);
 
-        if (Objects.isNull(response)) {
-            return;
-        }
-
-        Set<ConstraintViolation<CommitmentAction>> violations = validator.validate(response);
-        if (!violations.isEmpty()) {
-            log.warn("Commitment action validation failed: {}", violations);
+        if (Objects.isNull(response) || !isResponseValid(response)) {
             return;
         }
 
@@ -102,9 +103,17 @@ public class CommitmentRecorderWhatsAppMessageService extends WhatsAppMessageSer
         }
     }
 
+    private boolean isResponseValid(CommitmentAction response) {
+        Set<ConstraintViolation<CommitmentAction>> violations = validator.validate(response);
+        if (!violations.isEmpty()) {
+            log.warn("Commitment action validation failed: {}", violations);
+            return false;
+        }
+        return true;
+    }
 
     private String buildFutureCommitmentsSnapshot() {
-        Instant now = Instant.now();
+        Instant now = Instant.now(clock);
         return commitmentRepository
                 .findAll()
                 .stream()
@@ -124,8 +133,8 @@ public class CommitmentRecorderWhatsAppMessageService extends WhatsAppMessageSer
         entity.setToBeCompletedAt(commitment.toBeCompletedAt());
     }
 
-    private String buildMessageHistorySnapshot() {
-        return repository.getMessages().stream()
+    private String buildMessageHistorySnapshot(String participantMobileNumber) {
+        return repository.getMessages(participantMobileNumber).stream()
                 .map(this::formatMessage)
                 .collect(Collectors.joining("\n"));
     }
@@ -159,7 +168,15 @@ public class CommitmentRecorderWhatsAppMessageService extends WhatsAppMessageSer
                 - "[person 1] Hey, lets meet for sushi tmmrw?"
                 - "[person 2] Yup, I'm in.
                 
-                Here, the second message is a commitment.
+                - "[person 1] Can you send the slides?"
+                - "[person 2] Will send them in an hour.
+                
+                - "[person 1] Are you coming to the party?"
+                - "[person 2] Yes, I'll be there.
+                
+                Here, the second message in each exchange is a commitment.
+                IMPORTANT: Whenever the message is replied to in a commiting and positive fashion, assume it's a commitment.
+                Even informal responses like yes, yep, ya, etc are commitments.
                 
                 Review the conversation and determine the action type for the latest message:
                 
@@ -177,7 +194,7 @@ public class CommitmentRecorderWhatsAppMessageService extends WhatsAppMessageSer
                    - You MUST match this with an existing commitment from the "Existing Future Commitments" list below.
                 
                 Existing Future Commitments:
-                The following are existing commitments that are scheduled to be completed in the future. 
+                The following are existing commitments that are scheduled to be completed in the future.
                 - Use these to identify which commitment is being changed or cancelled (for CHANGE/CANCEL actions).
                 - Check this list BEFORE using CREATE to ensure you're not creating a duplicate commitment.
                 - If a commitment in the conversation matches one in this list, use CHANGE or CANCEL instead of CREATE.

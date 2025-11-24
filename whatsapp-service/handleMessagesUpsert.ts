@@ -59,7 +59,7 @@ export async function handleMessagesUpsert(
                 await messageProducer.publish(message);
             } catch (error) {
                 // TODO: Handle this?
-                console.log('Failed to publish message to Kafka:', error);
+                console.log(`Failed to publish message ${rawMessage} to Kafka:`, error);
             }
         })
     );

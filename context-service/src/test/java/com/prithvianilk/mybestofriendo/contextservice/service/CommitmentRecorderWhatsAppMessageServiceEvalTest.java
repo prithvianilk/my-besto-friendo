@@ -11,14 +11,18 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
+import java.time.Clock;
 import java.time.Instant;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.stream.Stream;
 
 import static com.prithvianilk.mybestofriendo.contextservice.service.WhatsAppMessageTestUtil.MessageContent;
 import static com.prithvianilk.mybestofriendo.contextservice.service.WhatsAppMessageTestUtil.createMessages;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.Mockito.when;
 
 @SpringBootTest
 class CommitmentRecorderWhatsAppMessageServiceEvalTest {
@@ -32,10 +36,17 @@ class CommitmentRecorderWhatsAppMessageServiceEvalTest {
     @Autowired
     private CommitmentRepository commitmentRepository;
 
+    @MockitoBean
+    private Clock clock;
+
     @BeforeEach
     void setUp() {
-        repository.getMessages().clear();
+        repository.clear();
         commitmentRepository.deleteAll();
+
+        Instant baseTime = Instant.parse("2025-01-15T00:00:00Z");
+        when(clock.instant()).thenReturn(baseTime);
+        when(clock.getZone()).thenReturn(ZoneId.of("UTC"));
     }
 
     @ParameterizedTest(name = "{0}")

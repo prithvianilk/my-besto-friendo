@@ -8,7 +8,6 @@ import java.util.List;
 
 public class WhatsAppMessageTestUtil {
 
-    private static final String DEFAULT_MY_PHONE = "9876543210";
     private static final String DEFAULT_MY_NAME = "Bob";
     private static final String DEFAULT_OTHER_PHONE = "1234567890";
     private static final String DEFAULT_OTHER_NAME = "Alice";
@@ -22,11 +21,10 @@ public class WhatsAppMessageTestUtil {
         Instant currentTime = baseTime;
 
         for (MessageContent messageContent : messages) {
-            String phoneNumber = messageContent.fromMe() ? DEFAULT_MY_PHONE : DEFAULT_OTHER_PHONE;
             String senderName = messageContent.fromMe() ? DEFAULT_MY_NAME : DEFAULT_OTHER_NAME;
 
             result.add(new WhatsAppMessage(
-                    phoneNumber,
+                    DEFAULT_OTHER_PHONE,
                     senderName,
                     messageContent.fromMe(),
                     messageContent.content(),
