@@ -1,6 +1,5 @@
 package com.prithvianilk.mybestofriendo.contextservice.service;
 
-import com.prithvianilk.mybestofriendo.contextservice.model.Commitment;
 import com.prithvianilk.mybestofriendo.contextservice.model.CommitmentEntity;
 import com.prithvianilk.mybestofriendo.contextservice.model.WhatsAppMessage;
 import com.prithvianilk.mybestofriendo.contextservice.repository.CommitmentRepository;
@@ -53,8 +52,7 @@ class CommitmentRecorderWhatsAppMessageServiceEvalTest {
     @MethodSource("testCases")
     void testCreateCommitment(
             String testCaseName,
-            List<WhatsAppMessage> inputMessages,
-            Commitment expectedCommitment) {
+            List<WhatsAppMessage> inputMessages) {
         for (WhatsAppMessage message : inputMessages) {
             repository.add(message);
         }
@@ -68,10 +66,7 @@ class CommitmentRecorderWhatsAppMessageServiceEvalTest {
                 "Expected exactly 1 commitment to be created");
 
         CommitmentEntity actualCommitment = actualCommitments.getFirst();
-        assertEquals(
-                expectedCommitment.participant(),
-                actualCommitment.getParticipant(),
-                "Participant mismatch");
+        assertEquals("1234567890", actualCommitment.getParticipantNumber());
     }
 
     static Stream<Arguments> testCases() {
@@ -83,12 +78,6 @@ class CommitmentRecorderWhatsAppMessageServiceEvalTest {
                         createMessages(baseTime,
                                 new MessageContent("Can you send me the report?", false),
                                 new MessageContent("I'll send you the report tomorrow", true)
-                        ),
-                        new Commitment(
-                                baseTime.plusSeconds(60),
-                                "I'll send you the report tomorrow",
-                                "Bob",
-                                baseTime.plusSeconds(60).plusSeconds(86400)
                         )
                 ),
                 Arguments.of(
@@ -96,12 +85,6 @@ class CommitmentRecorderWhatsAppMessageServiceEvalTest {
                         createMessages(baseTime,
                                 new MessageContent("Are you coming to the meeting?", false),
                                 new MessageContent("Yes, I'll be there at 5pm", true)
-                        ),
-                        new Commitment(
-                                baseTime.plusSeconds(60),
-                                "I'll be there at 5pm",
-                                "Bob",
-                                baseTime.plusSeconds(60).plusSeconds(25200)
                         )
                 ),
                 Arguments.of(
@@ -109,12 +92,6 @@ class CommitmentRecorderWhatsAppMessageServiceEvalTest {
                         createMessages(baseTime,
                                 new MessageContent("Can you help me with this project?", false),
                                 new MessageContent("I can help you with that", true)
-                        ),
-                        new Commitment(
-                                baseTime.plusSeconds(60),
-                                "I can help you with that",
-                                "Bob",
-                                null
                         )
                 )
         );
@@ -124,8 +101,7 @@ class CommitmentRecorderWhatsAppMessageServiceEvalTest {
     @MethodSource("updateTestCases")
     void testUpdateCommitment(
             String testCaseName,
-            List<WhatsAppMessage> inputMessages,
-            Commitment expectedUpdatedCommitment) {
+            List<WhatsAppMessage> inputMessages) {
         for (WhatsAppMessage message : inputMessages) {
             repository.add(message);
             service.onNewWhatsAppMessage(message);
@@ -136,15 +112,8 @@ class CommitmentRecorderWhatsAppMessageServiceEvalTest {
                 "Expected exactly 1 commitment in repository after update");
 
         CommitmentEntity actualCommitment = actualCommitments.getFirst();
-        assertEquals(expectedUpdatedCommitment.participant(),
-                actualCommitment.getParticipant(),
-                "Participant mismatch after update");
-        if (expectedUpdatedCommitment.toBeCompletedAt() != null) {
-            // TODO: Complete this test
-//            assertEquals(expectedUpdatedCommitment.toBeCompletedAt(),
-//                    actualCommitment.getToBeCompletedAt(),
-//                    "ToBeCompletedAt timestamp mismatch after update");
-        }
+        assertEquals("1234567890", actualCommitment.getParticipantNumber());
+        // TODO: Assert the updated time as well
     }
 
     static Stream<Arguments> updateTestCases() {
@@ -158,12 +127,6 @@ class CommitmentRecorderWhatsAppMessageServiceEvalTest {
                                 new MessageContent("Yes, sure!", true),
                                 new MessageContent("No, let's postpone to 6pm?", false),
                                 new MessageContent("sure that works", true)
-                        ),
-                        new Commitment(
-                                baseTime.plusSeconds(120),
-                                "sure that works",
-                                "Bob",
-                                baseTime.plusSeconds(120).plusSeconds(28800) // 6pm same day
                         )
                 ),
                 Arguments.of(
@@ -173,12 +136,6 @@ class CommitmentRecorderWhatsAppMessageServiceEvalTest {
                                 new MessageContent("Yessir!", true),
                                 new MessageContent("Bro, it's moved to 14th, dat fine?", false),
                                 new MessageContent("Yeah no worries.", true)
-                        ),
-                        new Commitment(
-                                baseTime.plusSeconds(180),
-                                "Yeah no worries.",
-                                "Bob",
-                                baseTime.plusSeconds(180).minusSeconds(86400) // 14th instead of 15th
                         )
                 )
         );

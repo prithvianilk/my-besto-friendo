@@ -12,8 +12,5 @@ public record Commitment(
         @NotBlank
         String description,
         
-        @NotBlank
-        String participant,
-
         Instant toBeCompletedAt) {
 }

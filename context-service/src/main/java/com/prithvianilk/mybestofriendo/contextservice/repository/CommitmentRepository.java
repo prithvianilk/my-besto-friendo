@@ -9,6 +9,8 @@ import java.util.List;
 
 @Repository
 public interface CommitmentRepository extends JpaRepository<CommitmentEntity, Long> {
+    List<CommitmentEntity> findByParticipantNumberAndToBeCompletedAtAfter(String participantNumber, Instant now);
+
     List<CommitmentEntity> findByToBeCompletedAtAfter(Instant now);
 }
 

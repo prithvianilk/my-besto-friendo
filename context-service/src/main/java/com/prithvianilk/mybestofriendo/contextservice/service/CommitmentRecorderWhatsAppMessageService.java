@@ -50,7 +50,7 @@ public class CommitmentRecorderWhatsAppMessageService extends WhatsAppMessageSer
     @Override
     public void onNewWhatsAppMessage(WhatsAppMessage message) {
         String messageHistorySnapshot = buildMessageHistorySnapshot(message.participantMobileNumber());
-        String futureCommitmentsSnapshot = buildFutureCommitmentsSnapshot();
+        String futureCommitmentsSnapshot = buildFutureCommitmentsSnapshot(message.participantMobileNumber());
         String prompt = buildCommitmentDetectionPrompt(messageHistorySnapshot, futureCommitmentsSnapshot);
 
         log.debug("Prompt:\n{}", prompt);
@@ -70,7 +70,8 @@ public class CommitmentRecorderWhatsAppMessageService extends WhatsAppMessageSer
 
         switch (response.type()) {
             case CREATE -> {
-                commitmentRepository.save(mapper.toEntity(commitment));
+                CommitmentEntity entity = mapper.toEntity(commitment, message.participantMobileNumber());
+                commitmentRepository.save(entity);
                 log.info("Created new commitment: {}", commitment);
             }
             case CHANGE -> {
@@ -112,16 +113,15 @@ public class CommitmentRecorderWhatsAppMessageService extends WhatsAppMessageSer
         return true;
     }
 
-    private String buildFutureCommitmentsSnapshot() {
+    private String buildFutureCommitmentsSnapshot(String participantNumber) {
         Instant now = Instant.now(clock);
         return commitmentRepository
-                .findAll()
+                .findByParticipantNumberAndToBeCompletedAtAfter(participantNumber, now)
                 .stream()
-                .filter(entity -> Objects.nonNull(entity.getToBeCompletedAt()) &&
-                        entity.getToBeCompletedAt().isAfter(now))
+                // TODO: Remove Participant from this snapshot
                 .map(entity -> String.format("ID:%d|Participant:%s|Description:%s|ToBeCompletedAt:%s",
                         entity.getId(),
-                        entity.getParticipant(),
+                        entity.getParticipantNumber(),
                         entity.getDescription(),
                         entity.getToBeCompletedAt()))
                 .collect(Collectors.joining(" || "));
@@ -148,6 +148,8 @@ public class CommitmentRecorderWhatsAppMessageService extends WhatsAppMessageSer
     }
 
     private String buildCommitmentDetectionPrompt(String messageSnapshot, String futureCommitmentsSnapshot) {
+        // TODO: Make sure the toBeCompletedAt is in IST
+        // TODO: Remove committedAt
         return """
                 Analyze the following conversation to identify commitments made by the user and determine the appropriate action.
                 
@@ -205,7 +207,6 @@ public class CommitmentRecorderWhatsAppMessageService extends WhatsAppMessageSer
                 - commitment:
                   - committedAt: The timestamp when the commitment was made. Expected format: 2025-11-03T17:00:00Z
                   - description: A brief description of the commitment. Make this an explicit mention of the commitment task to be done.
-                  - participant: The name of the person who made the commitment
                   - toBeCompletedAt:
                     - The timestamp when the user committed to complete the task (e.g., if they say "I'll meet you for dinner at 5pm tomorrow", this would be tomorrow at 5pm with the appropriate date). Expected format: 2025-11-03T17:00:00Z
                     - If a date is not mentioned, but a category of day is mentioned (morning, evening, etc), take morning as 9AM, afternoon as 1PM, evening as 4PM, night as 7PM.

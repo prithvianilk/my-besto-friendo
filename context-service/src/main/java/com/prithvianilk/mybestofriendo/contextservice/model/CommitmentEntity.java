@@ -10,8 +10,9 @@ import java.time.Instant;
 import java.util.Objects;
 
 @Entity
+// TODO: Index on the right fields
 @Table(name = "commitment", indexes = {
-    @Index(name = "idx_commitment_unique", columnList = "committed_at, participant", unique = true)
+    @Index(name = "idx_commitment_unique", columnList = "committed_at, participant_number", unique = true)
 })
 @Data
 @NoArgsConstructor
@@ -28,8 +29,8 @@ public class CommitmentEntity {
     @Column(name = "description", length = 1000)
     private String description;
 
-    @Column(name = "participant")
-    private String participant;
+    @Column(name = "participant_number")
+    private String participantNumber;
 
     @Column(name = "to_be_completed_at")
     private Instant toBeCompletedAt;
