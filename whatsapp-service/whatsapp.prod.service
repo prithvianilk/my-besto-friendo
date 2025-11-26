@@ -1,0 +1,14 @@
+[Unit]
+Description=WhatsApp Service
+After=network.target
+
+[Service]
+Type=exec
+WorkingDirectory=/home/ec2-user/app/my-besto-friendo/whatsapp-service
+ExecStart=/usr/bin/npm run dev
+Restart=always
+RestartSec=2
+KillMode=process
+
+[Install]
+WantedBy=multi-user.target
