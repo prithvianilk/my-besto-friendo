@@ -33,18 +33,16 @@ export async function handleMessagesUpsert(
         update.messages.map(async (rawMessage) => {
             const sentAt = new Date((rawMessage.messageTimestamp as number) * 1000);
             const participantMobileNumber = rawMessage.key.remoteJid?.slice(0, 12).slice(-10)!;
-
-            if (!isWhitelisted(participantMobileNumber)) {
-                console.log('Skipping message from non-whitelisted number');
-                return;
-            }
-
             const senderName = rawMessage.pushName!;
             const fromMe = rawMessage.key.fromMe!;
-
             const replyMessageContent = rawMessage.message?.extendedTextMessage?.text;
             const regularMessageContent = rawMessage.message?.conversation;
             const content = (replyMessageContent || regularMessageContent)!;
+
+            if (!isWhitelisted(participantMobileNumber)) {
+                console.log(`Skipping message from non-whitelisted number: ${participantMobileNumber}, sender name: ${senderName}`);
+                return;
+            }
 
             try {
                 const message = Message.parse({
