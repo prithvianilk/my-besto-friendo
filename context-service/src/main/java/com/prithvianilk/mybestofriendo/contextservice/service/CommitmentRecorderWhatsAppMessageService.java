@@ -138,7 +138,6 @@ public class CommitmentRecorderWhatsAppMessageService extends WhatsAppMessageSer
         return commitmentRepository
                 .findByParticipantNumberAndToBeCompletedAtAfter(participantNumber, now)
                 .stream()
-                // TODO: Remove Participant from this snapshot
                 .map(entity -> String.format("ID:%d|Participant:%s|Description:%s|ToBeCompletedAt:%s",
                         entity.getId(),
                         entity.getParticipantNumber(),
