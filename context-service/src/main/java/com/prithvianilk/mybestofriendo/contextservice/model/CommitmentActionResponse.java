@@ -3,7 +3,7 @@ package com.prithvianilk.mybestofriendo.contextservice.model;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 
-public record CommitmentAction(
+public record CommitmentActionResponse(
         @NotNull
         CommitmentActionType type,
 

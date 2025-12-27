@@ -4,7 +4,7 @@ import com.prithvianilk.mybestofriendo.contextservice.mapper.CalendarEventMapper
 import com.prithvianilk.mybestofriendo.contextservice.mapper.CommitmentMapper;
 import com.prithvianilk.mybestofriendo.contextservice.model.CalendarEvent;
 import com.prithvianilk.mybestofriendo.contextservice.model.Commitment;
-import com.prithvianilk.mybestofriendo.contextservice.model.CommitmentAction;
+import com.prithvianilk.mybestofriendo.contextservice.model.CommitmentActionResponse;
 import com.prithvianilk.mybestofriendo.contextservice.model.CommitmentEntity;
 import com.prithvianilk.mybestofriendo.contextservice.model.WhatsAppMessage;
 import com.prithvianilk.mybestofriendo.contextservice.repository.CommitmentRepository;
@@ -63,10 +63,10 @@ public class CommitmentRecorderWhatsAppMessageService extends WhatsAppMessageSer
 
         log.debug("Prompt:\n{}", prompt);
 
-        CommitmentAction response = chatClient.prompt()
+        CommitmentActionResponse response = chatClient.prompt()
                 .user(prompt)
                 .call()
-                .entity(CommitmentAction.class);
+                .entity(CommitmentActionResponse.class);
 
         log.info("Commitment action response: {}", response);
 
@@ -91,7 +91,7 @@ public class CommitmentRecorderWhatsAppMessageService extends WhatsAppMessageSer
         log.info("Created new commitment: {}", commitment);
     }
 
-    private void updateCommitment(CommitmentAction response, Commitment commitment) {
+    private void updateCommitment(CommitmentActionResponse response, Commitment commitment) {
         if (Objects.isNull(response.id())) {
             log.warn("Cannot change commitment - ID is required for CHANGE action: {}", commitment);
             return;
@@ -109,7 +109,7 @@ public class CommitmentRecorderWhatsAppMessageService extends WhatsAppMessageSer
         );
     }
 
-    private void cancelCommitment(CommitmentAction response, Commitment commitment) {
+    private void cancelCommitment(CommitmentActionResponse response, Commitment commitment) {
         if (Objects.isNull(response.id())) {
             log.warn("Cannot cancel commitment - ID is required for CANCEL action: {}", commitment);
             return;
@@ -124,8 +124,8 @@ public class CommitmentRecorderWhatsAppMessageService extends WhatsAppMessageSer
         );
     }
 
-    private boolean isResponseValid(CommitmentAction response) {
-        Set<ConstraintViolation<CommitmentAction>> violations = validator.validate(response);
+    private boolean isResponseValid(CommitmentActionResponse response) {
+        Set<ConstraintViolation<CommitmentActionResponse>> violations = validator.validate(response);
         if (!violations.isEmpty()) {
             log.warn("Commitment action validation failed: {}", violations);
             return false;
@@ -167,8 +167,6 @@ public class CommitmentRecorderWhatsAppMessageService extends WhatsAppMessageSer
     }
 
     private String buildCommitmentDetectionPrompt(String messageSnapshot, String futureCommitmentsSnapshot) {
-        // TODO: Make sure the toBeCompletedAt is in IST
-        // TODO: Remove committedAt
         return """
                 Analyze the following conversation to identify commitments made by the user and determine the appropriate action.
                 
