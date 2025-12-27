@@ -12,6 +12,7 @@ public interface CommitmentMapper {
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "participantNumber", source = "participantNumber")
-    CommitmentEntity toEntity(Commitment commitment, String participantNumber);
+    @Mapping(target = "calendarEventId", source = "calendarEventId")
+    CommitmentEntity toEntity(Commitment commitment, String participantNumber, String calendarEventId);
 }
 

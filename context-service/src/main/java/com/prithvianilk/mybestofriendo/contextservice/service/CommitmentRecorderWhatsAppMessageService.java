@@ -1,6 +1,8 @@
 package com.prithvianilk.mybestofriendo.contextservice.service;
 
+import com.prithvianilk.mybestofriendo.contextservice.mapper.CalendarEventMapper;
 import com.prithvianilk.mybestofriendo.contextservice.mapper.CommitmentMapper;
+import com.prithvianilk.mybestofriendo.contextservice.model.CalendarEvent;
 import com.prithvianilk.mybestofriendo.contextservice.model.Commitment;
 import com.prithvianilk.mybestofriendo.contextservice.model.CommitmentAction;
 import com.prithvianilk.mybestofriendo.contextservice.model.CommitmentEntity;
@@ -27,22 +29,28 @@ public class CommitmentRecorderWhatsAppMessageService extends WhatsAppMessageSer
 
     private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
     private final ChatClient chatClient;
+    private final CalendarEventService calendarEventService;
     private final CommitmentRepository commitmentRepository;
-    private final CommitmentMapper mapper;
+    private final CommitmentMapper commitmentMapper;
+    private final CalendarEventMapper calendarEventMapper;
     private final Validator validator;
     private final Clock clock;
 
     public CommitmentRecorderWhatsAppMessageService(
             WhatsAppMessageRepository repository,
             CommitmentRepository commitmentRepository,
+            CalendarEventService calendarEventService,
             ChatClient chatClient,
-            CommitmentMapper mapper,
+            CommitmentMapper commitmentMapper,
+            CalendarEventMapper calendarEventMapper,
             Validator validator,
             Clock clock) {
         super(repository);
         this.chatClient = chatClient;
+        this.calendarEventService = calendarEventService;
         this.commitmentRepository = commitmentRepository;
-        this.mapper = mapper;
+        this.commitmentMapper = commitmentMapper;
+        this.calendarEventMapper = calendarEventMapper;
         this.validator = validator;
         this.clock = clock;
     }
@@ -69,39 +77,51 @@ public class CommitmentRecorderWhatsAppMessageService extends WhatsAppMessageSer
         Commitment commitment = response.commitment();
 
         switch (response.type()) {
-            case CREATE -> {
-                CommitmentEntity entity = mapper.toEntity(commitment, message.participantMobileNumber());
-                commitmentRepository.save(entity);
-                log.info("Created new commitment: {}", commitment);
-            }
-            case CHANGE -> {
-                if (Objects.isNull(response.id())) {
-                    log.warn("Cannot change commitment - ID is required for CHANGE action: {}", commitment);
-                    return;
-                }
-                commitmentRepository.findById(response.id()).ifPresentOrElse(
-                        existingCommitment -> {
-                            updateCommitmentEntity(existingCommitment, commitment);
-                            commitmentRepository.save(existingCommitment);
-                            log.info("Updated commitment: {}", commitment);
-                        },
-                        () -> log.warn("Cannot change commitment - not found with ID: {}", response.id())
-                );
-            }
-            case CANCEL -> {
-                if (Objects.isNull(response.id())) {
-                    log.warn("Cannot cancel commitment - ID is required for CANCEL action: {}", commitment);
-                    return;
-                }
-                commitmentRepository.findById(response.id()).ifPresentOrElse(
-                        existingCommitment -> {
-                            commitmentRepository.delete(existingCommitment);
-                            log.info("Cancelled commitment: {}", commitment);
-                        },
-                        () -> log.warn("Cannot cancel commitment - not found with ID: {}", response.id())
-                );
-            }
+            case CREATE -> createCommitment(message, commitment);
+            case CHANGE -> updateCommitment(response, commitment);
+            case CANCEL -> cancelCommitment(response, commitment);
         }
+    }
+
+    private void createCommitment(WhatsAppMessage message, Commitment commitment) {
+        CalendarEvent calendarEvent = calendarEventMapper.toCalendarEvent(commitment);
+        String eventId = calendarEventService.createEvent(calendarEvent);
+        CommitmentEntity entity = commitmentMapper.toEntity(commitment, message.participantMobileNumber(), eventId);
+        commitmentRepository.save(entity);
+        log.info("Created new commitment: {}", commitment);
+    }
+
+    private void updateCommitment(CommitmentAction response, Commitment commitment) {
+        if (Objects.isNull(response.id())) {
+            log.warn("Cannot change commitment - ID is required for CHANGE action: {}", commitment);
+            return;
+        }
+        commitmentRepository.findById(response.id()).ifPresentOrElse(
+                existingCommitment -> {
+                    updateCommitmentEntity(existingCommitment, commitment);
+                    CalendarEvent calendarEvent = calendarEventMapper.toCalendarEvent(commitment);
+                    String newCalendarEventId = calendarEventService.updateEvent(existingCommitment.getCalendarEventId(), calendarEvent);
+                    existingCommitment.setCalendarEventId(newCalendarEventId);
+                    commitmentRepository.save(existingCommitment);
+                    log.info("Updated commitment: {}", commitment);
+                },
+                () -> log.warn("Cannot change commitment - not found with ID: {}", response.id())
+        );
+    }
+
+    private void cancelCommitment(CommitmentAction response, Commitment commitment) {
+        if (Objects.isNull(response.id())) {
+            log.warn("Cannot cancel commitment - ID is required for CANCEL action: {}", commitment);
+            return;
+        }
+        commitmentRepository.findById(response.id()).ifPresentOrElse(
+                existingCommitment -> {
+                    calendarEventService.deleteEvent(existingCommitment.getCalendarEventId());
+                    commitmentRepository.delete(existingCommitment);
+                    log.info("Cancelled commitment: {}", commitment);
+                },
+                () -> log.warn("Cannot cancel commitment - not found with ID: {}", response.id())
+        );
     }
 
     private boolean isResponseValid(CommitmentAction response) {

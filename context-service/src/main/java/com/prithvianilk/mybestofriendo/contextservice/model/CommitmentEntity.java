@@ -35,6 +35,9 @@ public class CommitmentEntity {
     @Column(name = "to_be_completed_at")
     private Instant toBeCompletedAt;
 
+    @Column(name = "calendar_event_id")
+    private String calendarEventId;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 

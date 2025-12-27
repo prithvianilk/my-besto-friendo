@@ -6,11 +6,11 @@ import jakarta.validation.constraints.NotNull;
 public record CommitmentAction(
         @NotNull
         CommitmentActionType type,
-        
+
         @NotNull
         @Valid
         Commitment commitment,
-        
+
         Long id) {
 }
 

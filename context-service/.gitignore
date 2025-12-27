@@ -39,3 +39,8 @@ out/
 
 ### DB ###
 context-service.db
+
+# App secrets
+credentials.json
+application-secrets.properties
+StoredCredential
