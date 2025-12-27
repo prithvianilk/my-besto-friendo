@@ -1,6 +1,7 @@
 import type { BaileysEventMap } from 'baileys';
 import { MessageProducer } from './producer.js';
 import z from 'zod';
+import { config } from './config.js';
 
 export const Message = z.object({
     participantMobileNumber: z.string(),
@@ -12,13 +13,8 @@ export const Message = z.object({
 
 export type Message = z.infer<typeof Message>;
 
-const whitelistedParticipantMobileNumbers: string[] =
-    process.env.WHITELISTED_PARTICIPANT_MOBILE_NUMBERS?.split(',')
-        .map((num) => num.trim())
-        .filter(Boolean) ?? [];
-
 function isWhitelisted(participantMobileNumber: string): boolean {
-    return whitelistedParticipantMobileNumbers.includes(participantMobileNumber);
+    return config.whitelistedParticipantMobileNumbers.includes(participantMobileNumber);
 }
 
 export async function handleMessagesUpsert(
