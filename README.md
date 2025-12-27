@@ -3,7 +3,12 @@
 - This is yet another personal assistant app
 - The main focus here is an always-on AI assistant that uses WhatsApp as a channel for context about a user's day to day life.
 
+> The To`do to Prithvi's Yuji
+
+<img src="https://github.com/user-attachments/assets/24435010-8d3f-4670-9d52-47058e890507" alt="Yuji and Todo Anime" width="700" />
+
 # Long-Term Vision
+
 
 ## Features
 
