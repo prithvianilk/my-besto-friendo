@@ -9,7 +9,7 @@
 
 ### Context gathering, storage and retrieval
 
-- Understand WhatsApp messages (can be extednded to voice, video calls and IRL conversations).
+- Understand WhatsApp messages (can be extended to voice, video calls and IRL conversations).
 - Store this context in a manner such that it's secure and has well-defined retrieval patterns.
 
 ### Act as a second brain, via AI
