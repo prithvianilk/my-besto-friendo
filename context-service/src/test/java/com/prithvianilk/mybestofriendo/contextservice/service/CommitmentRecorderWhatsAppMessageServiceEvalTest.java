@@ -1,5 +1,6 @@
 package com.prithvianilk.mybestofriendo.contextservice.service;
 
+import com.google.api.services.calendar.Calendar;
 import com.prithvianilk.mybestofriendo.contextservice.model.CommitmentEntity;
 import com.prithvianilk.mybestofriendo.contextservice.model.WhatsAppMessage;
 import com.prithvianilk.mybestofriendo.contextservice.repository.CommitmentRepository;
@@ -37,6 +38,12 @@ class CommitmentRecorderWhatsAppMessageServiceEvalTest {
 
     @MockitoBean
     private Clock clock;
+
+    @MockitoBean
+    private CalendarEventService calendarEventService;
+
+    @MockitoBean
+    private Calendar calendar;
 
     @BeforeEach
     void setUp() {
