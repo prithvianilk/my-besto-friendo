@@ -4,6 +4,7 @@ import com.google.api.client.util.DateTime;
 import com.google.api.services.calendar.Calendar;
 import com.google.api.services.calendar.model.Event;
 import com.google.api.services.calendar.model.EventDateTime;
+import com.google.api.services.calendar.model.EventReminder;
 import com.prithvianilk.mybestofriendo.contextservice.model.CalendarEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -11,13 +12,24 @@ import org.springframework.stereotype.Service;
 
 import java.io.IOException;
 import java.time.Instant;
+import java.util.List;
+import java.util.stream.Stream;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class CalendarEventService {
-
     private final Calendar calendarService;
+
+    /**
+     * Default event reminders at intervals before the start time:
+     * 30m, 1h, 3h, 12h (half day), and 24h (1 day).
+     */
+    private static final List<EventReminder> EVENT_REMINDERS = Stream
+            .of(30, 60, 3 * 60, 12 * 60, 24 * 60)
+            .map(minutes -> new EventReminder().setMinutes(minutes))
+            .toList();
+
     private static final String TIME_ZONE = "Asia/Kolkata";
     private static final String CALENDAR_ID = "primary";
 
@@ -68,6 +80,8 @@ public class CalendarEventService {
 
         EventDateTime end = getEventDateTime(calendarEvent.endTime());
         event.setEnd(end);
+
+        event.setReminders(new Event.Reminders().setOverrides(EVENT_REMINDERS));
 
         return event;
     }
