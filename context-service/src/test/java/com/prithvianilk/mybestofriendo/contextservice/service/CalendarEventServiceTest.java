@@ -61,7 +61,7 @@ class CalendarEventServiceTest {
     private Event createExpectedEvent() {
         List<EventReminder> reminders = Stream
                 .of(30, 60, 180, 720, 1440)
-                .map(minutes -> new EventReminder().setMinutes(minutes))
+                .map(minutes -> new EventReminder().setMethod("popup").setMinutes(minutes))
                 .toList();
 
         return new Event()

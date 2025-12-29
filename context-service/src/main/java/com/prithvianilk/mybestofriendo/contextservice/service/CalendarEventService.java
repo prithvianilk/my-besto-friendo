@@ -27,7 +27,12 @@ public class CalendarEventService {
      */
     private static final List<EventReminder> EVENT_REMINDERS = Stream
             .of(30, 60, 3 * 60, 12 * 60, 24 * 60)
-            .map(minutes -> new EventReminder().setMinutes(minutes))
+            .map(minutes -> {
+                EventReminder eventReminder = new EventReminder();
+                eventReminder.setMethod("popup");
+                eventReminder.setMinutes(minutes);
+                return eventReminder;
+            })
             .toList();
 
     private static final String TIME_ZONE = "Asia/Kolkata";
