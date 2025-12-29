@@ -81,7 +81,11 @@ public class CalendarEventService {
         EventDateTime end = getEventDateTime(calendarEvent.endTime());
         event.setEnd(end);
 
-        event.setReminders(new Event.Reminders().setOverrides(EVENT_REMINDERS));
+        Event.Reminders reminders = new Event.Reminders()
+                .setOverrides(EVENT_REMINDERS)
+                .setUseDefault(false);
+
+        event.setReminders(reminders);
 
         return event;
     }

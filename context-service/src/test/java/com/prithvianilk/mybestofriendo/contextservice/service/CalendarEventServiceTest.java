@@ -73,6 +73,6 @@ class CalendarEventServiceTest {
                 .setEnd(new EventDateTime()
                         .setDateTime(new DateTime(Instant.parse("2025-01-01T11:00:00Z").toEpochMilli()))
                         .setTimeZone("Asia/Kolkata"))
-                .setReminders(new Event.Reminders().setOverrides(reminders));
+                .setReminders(new Event.Reminders().setOverrides(reminders).setUseDefault(false));
     }
 }
