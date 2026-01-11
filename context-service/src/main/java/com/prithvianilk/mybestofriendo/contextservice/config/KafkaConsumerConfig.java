@@ -9,6 +9,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
 import org.springframework.kafka.core.ConsumerFactory;
 import org.springframework.kafka.core.DefaultKafkaConsumerFactory;
+import org.springframework.kafka.listener.ContainerProperties;
 import org.springframework.kafka.listener.DefaultErrorHandler;
 import org.springframework.kafka.support.serializer.ErrorHandlingDeserializer;
 import org.springframework.kafka.support.serializer.JsonDeserializer;
@@ -29,6 +30,11 @@ public class KafkaConsumerConfig {
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
         props.put(ConsumerConfig.GROUP_ID_CONFIG, "context-service-group");
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        // Process one record at a time to prevent session timeouts during slow LLM
+        // processing
+        props.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, "1");
+        // Disable auto-commit to let Spring manage offsets (AckMode.RECORD)
+        props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
 
         // Configure ErrorHandlingDeserializer for key
         props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ErrorHandlingDeserializer.class);
@@ -48,13 +54,13 @@ public class KafkaConsumerConfig {
 
     @Bean
     public ConcurrentKafkaListenerContainerFactory<String, WhatsAppMessage> kafkaListenerContainerFactory() {
-        ConcurrentKafkaListenerContainerFactory<String, WhatsAppMessage> factory =
-            new ConcurrentKafkaListenerContainerFactory<>();
+        ConcurrentKafkaListenerContainerFactory<String, WhatsAppMessage> factory = new ConcurrentKafkaListenerContainerFactory<>();
         factory.setConsumerFactory(consumerFactory());
+        factory.getContainerProperties().setAckMode(ContainerProperties.AckMode.RECORD);
 
         // Configure error handler
         DefaultErrorHandler errorHandler = new DefaultErrorHandler(
-            new FixedBackOff(1000L, 3L) // 1 second interval, 3 retry attempts
+                new FixedBackOff(1000L, 3L) // 1 second interval, 3 retry attempts
         );
         factory.setCommonErrorHandler(errorHandler);
 
