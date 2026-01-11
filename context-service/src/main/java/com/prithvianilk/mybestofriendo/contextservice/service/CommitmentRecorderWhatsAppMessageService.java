@@ -17,7 +17,6 @@ import jakarta.validation.Validator;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.stereotype.Service;
 
-import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -57,28 +56,9 @@ public class CommitmentRecorderWhatsAppMessageService extends WhatsAppMessageSer
 
     @Override
     public void onNewWhatsAppMessage(WhatsAppMessage message) {
-        enrich(CommitmentManagementContext.builder()
-                .participantMobileNumber(message.participantMobileNumber())
-                .senderName(message.senderName())
-                .fromMe(message.fromMe())
-                .messageContent(message.content())
-                .messageSentAt(message.sentAt()));
+        enrichMessageContext(message);
 
-        Collection<WhatsAppMessage> historyMessages = getWhatsAppMessages(message);
-        String messageHistorySnapshot = getHistorySnapshot(historyMessages);
-
-        List<CommitmentEntity> futureCommitments = getFutureCommitments(message);
-        String futureCommitmentsSnapshot = getFutureCommitmentsSnapshot(futureCommitments);
-
-        enrich(CommitmentManagementContext.builder()
-                .historySnapshotSize(historyMessages.size())
-                .historyMessages(new ArrayList<>(historyMessages))
-                .futureCommitmentsSnapshotSize(futureCommitments.size())
-                .futureCommitments(futureCommitments));
-
-        String prompt = buildCommitmentDetectionPrompt(messageHistorySnapshot, futureCommitmentsSnapshot);
-
-        enrich(CommitmentManagementContext.builder().prompt(prompt));
+        String prompt = getPrompt(message);
 
         CommitmentActionResponse response = chatClient.prompt()
                 .user(prompt)
@@ -93,24 +73,46 @@ public class CommitmentRecorderWhatsAppMessageService extends WhatsAppMessageSer
         }
 
         if (!isResponseValid(response)) {
-            enrich(CommitmentManagementContext.builder()
-                    .success(false));
+            enrich(CommitmentManagementContext.builder().success(false));
             return;
         }
 
         Commitment commitment = response.commitment();
-        enrich(CommitmentManagementContext.builder()
-                .actionType(response.type())
-                .commitmentId(response.id())
-                .commitmentDescription(commitment.description())
-                .committedAt(commitment.committedAt())
-                .toBeCompletedAt(commitment.toBeCompletedAt()));
+        enrichResponseContext(response, commitment);
 
         switch (response.type()) {
             case CREATE -> createCommitment(message, commitment);
             case CHANGE -> updateCommitment(response, commitment);
             case CANCEL -> cancelCommitment(response, commitment);
         }
+    }
+
+    private String getPrompt(WhatsAppMessage message) {
+        Collection<WhatsAppMessage> historyMessages = getWhatsAppMessages(message);
+        String messageHistorySnapshot = getHistorySnapshot(historyMessages);
+
+        List<CommitmentEntity> futureCommitments = getFutureCommitments(message);
+        String futureCommitmentsSnapshot = getFutureCommitmentsSnapshot(futureCommitments);
+
+        String prompt = buildCommitmentDetectionPrompt(messageHistorySnapshot, futureCommitmentsSnapshot);
+
+        enrich(CommitmentManagementContext.builder()
+                .historySnapshotSize(historyMessages.size())
+                .historyMessages(new ArrayList<>(historyMessages))
+                .futureCommitmentsSnapshotSize(futureCommitments.size())
+                .futureCommitments(futureCommitments)
+                .prompt(prompt));
+
+        return prompt;
+    }
+
+    private void enrichMessageContext(WhatsAppMessage message) {
+        enrich(CommitmentManagementContext.builder()
+                .participantMobileNumber(message.participantMobileNumber())
+                .senderName(message.senderName())
+                .fromMe(message.fromMe())
+                .messageContent(message.content())
+                .messageSentAt(message.sentAt()));
     }
 
     private static String getFutureCommitmentsSnapshot(List<CommitmentEntity> futureCommitments) {
@@ -160,6 +162,7 @@ public class CommitmentRecorderWhatsAppMessageService extends WhatsAppMessageSer
                     .failureReason("ID is required for CHANGE action"));
             return;
         }
+
         commitmentRepository.findById(response.id()).ifPresentOrElse(
                 existingCommitment -> {
                     updateCommitmentEntity(existingCommitment, commitment);
@@ -214,6 +217,15 @@ public class CommitmentRecorderWhatsAppMessageService extends WhatsAppMessageSer
         return true;
     }
 
+    private void enrichResponseContext(CommitmentActionResponse response, Commitment commitment) {
+        enrich(CommitmentManagementContext.builder()
+                .actionType(response.type())
+                .commitmentId(response.id())
+                .commitmentDescription(commitment.description())
+                .committedAt(commitment.committedAt())
+                .toBeCompletedAt(commitment.toBeCompletedAt()));
+    }
+
     private void updateCommitmentEntity(CommitmentEntity entity, Commitment commitment) {
         entity.setCommittedAt(commitment.committedAt());
         entity.setDescription(commitment.description());
@@ -231,36 +243,36 @@ public class CommitmentRecorderWhatsAppMessageService extends WhatsAppMessageSer
     private String buildCommitmentDetectionPrompt(String messageSnapshot, String futureCommitmentsSnapshot) {
         return """
                 Analyze the following conversation to identify commitments made by the user and determine the appropriate action.
-
+                
                 A commitment is a statement where the user explicitly or implicitly promises to:
                 - Perform a specific action in the future
                 - Deliver something by a certain time
                 - Meet someone or attend an event
                 - Complete a task or responsibility
-
+                
                 Examples of commitments:
                 - "I'll send you the report tomorrow"
                 - "I can help you with that"
                 - "Let me get back to you on this"
                 - "I'll be there at 5pm"
-
+                
                 It could also be a reply to an ask for a commitment.
                 For example:
                 - "[person 1] Hey, lets meet for sushi tmmrw?"
                 - "[person 2] Yup, I'm in.
-
+                
                 - "[person 1] Can you send the slides?"
                 - "[person 2] Will send them in an hour.
-
+                
                 - "[person 1] Are you coming to the party?"
                 - "[person 2] Yes, I'll be there.
-
+                
                 Here, the second message in each exchange is a commitment.
                 IMPORTANT: Whenever the message is replied to in a commiting and positive fashion, assume it's a commitment.
                 Even informal responses like yes, yep, ya, etc are commitments.
-
+                
                 Review the conversation and determine the action type for the latest message:
-
+                
                 Action Types:
                 1. CREATE: A new commitment is being made that doesn't modify or cancel an existing one.
                    - IMPORTANT: Before using CREATE, check the "Existing Future Commitments" list below.
@@ -273,14 +285,14 @@ public class CommitmentRecorderWhatsAppMessageService extends WhatsAppMessageSer
                 3. CANCEL: An existing commitment is being cancelled or withdrawn.
                    - Examples: "I can't make it", "Let's cancel that", "Never mind, I won't be able to do that"
                    - You MUST match this with an existing commitment from the "Existing Future Commitments" list below.
-
+                
                 Existing Future Commitments:
                 The following are existing commitments that are scheduled to be completed in the future.
                 - Use these to identify which commitment is being changed or cancelled (for CHANGE/CANCEL actions).
                 - Check this list BEFORE using CREATE to ensure you're not creating a duplicate commitment.
                 - If a commitment in the conversation matches one in this list, use CHANGE or CANCEL instead of CREATE.
                 %s
-
+                
                 If a commitment action is found, extract:
                 - type: One of CREATE, CHANGE, or CANCEL
                 - commitment:
@@ -296,9 +308,9 @@ public class CommitmentRecorderWhatsAppMessageService extends WhatsAppMessageSer
                   - Use the ID from the matching commitment in the "Existing Future Commitments" list.
                   - If the action is CREATE, set id to null.
                   - If the action is CHANGE or CANCEL but you cannot find a matching commitment, still set the id to null (but this will cause an error, so try your best to match it).
-
+                
                 If no commitment action is found, return null for both type and commitment.
-
+                
                 Conversation:
                 %s
                 """
