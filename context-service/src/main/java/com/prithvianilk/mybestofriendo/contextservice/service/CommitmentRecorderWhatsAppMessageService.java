@@ -14,7 +14,6 @@ import com.prithvianilk.mybestofriendo.contextservice.repository.CommitmentRepos
 import com.prithvianilk.mybestofriendo.contextservice.repository.WhatsAppMessageRepository;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Validator;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.stereotype.Service;
 
@@ -22,11 +21,13 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-@Slf4j
 @Service
 public class CommitmentRecorderWhatsAppMessageService extends WhatsAppMessageService {
 
@@ -62,28 +63,40 @@ public class CommitmentRecorderWhatsAppMessageService extends WhatsAppMessageSer
     public void onNewWhatsAppMessage(WhatsAppMessage message) {
         enrich(CommitmentManagementContext.builder()
                 .participantMobileNumber(message.participantMobileNumber())
-                .messageContent(message.content()));
+                .senderName(message.senderName())
+                .fromMe(message.fromMe())
+                .messageContent(message.content())
+                .messageSentAt(message.sentAt()));
 
-        String messageHistorySnapshot = buildMessageHistorySnapshot(message.participantMobileNumber());
-        String futureCommitmentsSnapshot = buildFutureCommitmentsSnapshot(message.participantMobileNumber());
+        Collection<WhatsAppMessage> historyMessages = getWhatsAppMessages(message);
+        String messageHistorySnapshot = getHistorySnapshot(historyMessages);
+
+        List<CommitmentEntity> futureCommitments = getFutureCommitments(message);
+        String futureCommitmentsSnapshot = getFutureCommitmentsSnapshot(futureCommitments);
 
         enrich(CommitmentManagementContext.builder()
-                .historySnapshotSize(messageHistorySnapshot.isBlank() ? 0 : messageHistorySnapshot.split("\n").length)
-                .futureCommitmentsSnapshotSize(
-                        futureCommitmentsSnapshot.isBlank() ? 0 : futureCommitmentsSnapshot.split(" \\|\\| ").length));
+                .historySnapshotSize(historyMessages.size())
+                .historyMessages(new ArrayList<>(historyMessages))
+                .futureCommitmentsSnapshotSize(futureCommitments.size())
+                .futureCommitments(futureCommitments));
 
         String prompt = buildCommitmentDetectionPrompt(messageHistorySnapshot, futureCommitmentsSnapshot);
 
-        log.debug("Prompt:\n{}", prompt);
+        enrich(CommitmentManagementContext.builder().prompt(prompt));
 
         CommitmentActionResponse response = chatClient.prompt()
                 .user(prompt)
                 .call()
                 .entity(CommitmentActionResponse.class);
 
-        log.info("Commitment action response: {}", response);
+        if (Objects.isNull(response)) {
+            enrich(CommitmentManagementContext.builder()
+                    .success(false)
+                    .failureReason("LLM returned null response"));
+            return;
+        }
 
-        if (Objects.isNull(response) || !isResponseValid(response)) {
+        if (!isResponseValid(response)) {
             enrich(CommitmentManagementContext.builder()
                     .success(false));
             return;
@@ -92,13 +105,43 @@ public class CommitmentRecorderWhatsAppMessageService extends WhatsAppMessageSer
         Commitment commitment = response.commitment();
         enrich(CommitmentManagementContext.builder()
                 .actionType(response.type())
-                .commitmentId(response.id()));
+                .commitmentId(response.id())
+                .commitmentDescription(commitment.description())
+                .committedAt(commitment.committedAt())
+                .toBeCompletedAt(commitment.toBeCompletedAt()));
 
         switch (response.type()) {
             case CREATE -> createCommitment(message, commitment);
             case CHANGE -> updateCommitment(response, commitment);
             case CANCEL -> cancelCommitment(response, commitment);
         }
+    }
+
+    private static String getFutureCommitmentsSnapshot(List<CommitmentEntity> futureCommitments) {
+        return futureCommitments.stream()
+                .map(entity -> String.format("ID:%d|Participant:%s|Description:%s|ToBeCompletedAt:%s",
+                        entity.getId(),
+                        entity.getParticipantNumber(),
+                        entity.getDescription(),
+                        entity.getToBeCompletedAt()))
+                .collect(Collectors.joining(" || "));
+    }
+
+    private List<CommitmentEntity> getFutureCommitments(WhatsAppMessage message) {
+        return commitmentRepository
+                .findByParticipantNumberAndToBeCompletedAtAfter(
+                        message.participantMobileNumber(),
+                        Instant.now(clock));
+    }
+
+    private String getHistorySnapshot(Collection<WhatsAppMessage> historyMessages) {
+        return historyMessages.stream()
+                .map(this::formatMessage)
+                .collect(Collectors.joining("\n"));
+    }
+
+    private Collection<WhatsAppMessage> getWhatsAppMessages(WhatsAppMessage message) {
+        return repository.getMessages(message.participantMobileNumber());
     }
 
     private void createCommitment(WhatsAppMessage message, Commitment commitment) {
@@ -111,13 +154,14 @@ public class CommitmentRecorderWhatsAppMessageService extends WhatsAppMessageSer
                 .commitmentId(entity.getId())
                 .calendarEventId(eventId)
                 .success(true));
-
-        log.info("Created new commitment: {}", commitment);
     }
 
     private void updateCommitment(CommitmentActionResponse response, Commitment commitment) {
         if (Objects.isNull(response.id())) {
-            log.warn("Cannot change commitment - ID is required for CHANGE action: {}", commitment);
+            enrich(CommitmentManagementContext.builder()
+                    .success(false)
+                    .commitmentDescription(commitment.description())
+                    .failureReason("ID is required for CHANGE action"));
             return;
         }
         commitmentRepository.findById(response.id()).ifPresentOrElse(
@@ -132,15 +176,19 @@ public class CommitmentRecorderWhatsAppMessageService extends WhatsAppMessageSer
                     enrich(CommitmentManagementContext.builder()
                             .calendarEventId(newCalendarEventId)
                             .success(true));
-
-                    log.info("Updated commitment: {}", commitment);
                 },
-                () -> log.warn("Cannot change commitment - not found with ID: {}", response.id()));
+                () -> enrich(CommitmentManagementContext.builder()
+                        .success(false)
+                        .commitmentId(response.id())
+                        .failureReason("Not found with ID")));
     }
 
     private void cancelCommitment(CommitmentActionResponse response, Commitment commitment) {
         if (Objects.isNull(response.id())) {
-            log.warn("Cannot cancel commitment - ID is required for CANCEL action: {}", commitment);
+            enrich(CommitmentManagementContext.builder()
+                    .success(false)
+                    .commitmentDescription(commitment.description())
+                    .failureReason("ID is required for CANCEL action"));
             return;
         }
         commitmentRepository.findById(response.id()).ifPresentOrElse(
@@ -150,10 +198,11 @@ public class CommitmentRecorderWhatsAppMessageService extends WhatsAppMessageSer
 
                     enrich(CommitmentManagementContext.builder()
                             .success(true));
-
-                    log.info("Cancelled commitment: {}", commitment);
                 },
-                () -> log.warn("Cannot cancel commitment - not found with ID: {}", response.id()));
+                () -> enrich(CommitmentManagementContext.builder()
+                        .success(false)
+                        .commitmentId(response.id())
+                        .failureReason("Not found with ID")));
     }
 
     private void enrich(CommitmentManagementContext.CommitmentManagementContextBuilder builder) {
@@ -163,35 +212,16 @@ public class CommitmentRecorderWhatsAppMessageService extends WhatsAppMessageSer
     private boolean isResponseValid(CommitmentActionResponse response) {
         Set<ConstraintViolation<CommitmentActionResponse>> violations = validator.validate(response);
         if (!violations.isEmpty()) {
-            log.warn("Commitment action validation failed: {}", violations);
+            enrich(CommitmentManagementContext.builder().validationErrors(violations.toString()));
             return false;
         }
         return true;
-    }
-
-    private String buildFutureCommitmentsSnapshot(String participantNumber) {
-        Instant now = Instant.now(clock);
-        return commitmentRepository
-                .findByParticipantNumberAndToBeCompletedAtAfter(participantNumber, now)
-                .stream()
-                .map(entity -> String.format("ID:%d|Participant:%s|Description:%s|ToBeCompletedAt:%s",
-                        entity.getId(),
-                        entity.getParticipantNumber(),
-                        entity.getDescription(),
-                        entity.getToBeCompletedAt()))
-                .collect(Collectors.joining(" || "));
     }
 
     private void updateCommitmentEntity(CommitmentEntity entity, Commitment commitment) {
         entity.setCommittedAt(commitment.committedAt());
         entity.setDescription(commitment.description());
         entity.setToBeCompletedAt(commitment.toBeCompletedAt());
-    }
-
-    private String buildMessageHistorySnapshot(String participantMobileNumber) {
-        return repository.getMessages(participantMobileNumber).stream()
-                .map(this::formatMessage)
-                .collect(Collectors.joining("\n"));
     }
 
     private String formatMessage(WhatsAppMessage message) {

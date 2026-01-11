@@ -1,5 +1,7 @@
 package com.prithvianilk.mybestofriendo.contextservice.listener;
 
+import com.prithvianilk.mybestofriendo.contextservice.logging.CommitmentManagementContext;
+import com.prithvianilk.mybestofriendo.contextservice.logging.WideEventContext;
 import com.prithvianilk.mybestofriendo.contextservice.logging.WithWideEventLogging;
 import com.prithvianilk.mybestofriendo.contextservice.model.WhatsAppMessage;
 import com.prithvianilk.mybestofriendo.contextservice.repository.WhatsAppMessageRepository;
@@ -9,6 +11,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 
+import java.time.Instant;
 import java.util.List;
 
 @Slf4j
@@ -22,6 +25,9 @@ public class WhatsAppMessageListener {
     @WithWideEventLogging
     @KafkaListener(topics = "whatsapp-messages", groupId = "context-service-group")
     public void listen(WhatsAppMessage message) {
+        WideEventContext.enrich("commitmentManagement", CommitmentManagementContext.builder()
+                .whatsappMessageReceivedAt(Instant.now())
+                .build());
         log.info("Received WhatsApp message: {}", message);
         repository.add(message);
         for (WhatsAppMessageService service : services) {
