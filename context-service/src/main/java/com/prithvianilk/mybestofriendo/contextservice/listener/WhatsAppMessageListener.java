@@ -1,5 +1,6 @@
 package com.prithvianilk.mybestofriendo.contextservice.listener;
 
+import com.prithvianilk.mybestofriendo.contextservice.logging.WithWideEventLogging;
 import com.prithvianilk.mybestofriendo.contextservice.model.WhatsAppMessage;
 import com.prithvianilk.mybestofriendo.contextservice.repository.WhatsAppMessageRepository;
 import com.prithvianilk.mybestofriendo.contextservice.service.WhatsAppMessageService;
@@ -18,6 +19,7 @@ public class WhatsAppMessageListener {
     private final WhatsAppMessageRepository repository;
     private final List<WhatsAppMessageService> services;
 
+    @WithWideEventLogging
     @KafkaListener(topics = "whatsapp-messages", groupId = "context-service-group")
     public void listen(WhatsAppMessage message) {
         log.info("Received WhatsApp message: {}", message);

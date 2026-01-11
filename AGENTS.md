@@ -1,5 +1,8 @@
 # Agent Rules
 
+## Comments
+- Prevent adding comments unless asked for. Don't add comments to explain the code, instead write meaningful method names and variable names that explain the intent.
+
 ## Java writing standards
 
 - Use java.lang.Objects's isNull and nonNull instead of null checks based on '=' operator
