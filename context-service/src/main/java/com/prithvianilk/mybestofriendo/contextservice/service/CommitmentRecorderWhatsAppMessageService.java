@@ -17,7 +17,6 @@ import jakarta.validation.Validator;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.stereotype.Service;
 
-import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -38,7 +37,6 @@ public class CommitmentRecorderWhatsAppMessageService extends WhatsAppMessageSer
     private final CommitmentMapper commitmentMapper;
     private final CalendarEventMapper calendarEventMapper;
     private final Validator validator;
-    private final Clock clock;
 
     public CommitmentRecorderWhatsAppMessageService(
             WhatsAppMessageRepository repository,
@@ -47,8 +45,7 @@ public class CommitmentRecorderWhatsAppMessageService extends WhatsAppMessageSer
             ChatClient chatClient,
             CommitmentMapper commitmentMapper,
             CalendarEventMapper calendarEventMapper,
-            Validator validator,
-            Clock clock) {
+            Validator validator) {
         super(repository);
         this.chatClient = chatClient;
         this.calendarEventService = calendarEventService;
@@ -56,7 +53,6 @@ public class CommitmentRecorderWhatsAppMessageService extends WhatsAppMessageSer
         this.commitmentMapper = commitmentMapper;
         this.calendarEventMapper = calendarEventMapper;
         this.validator = validator;
-        this.clock = clock;
     }
 
     @Override
@@ -131,7 +127,7 @@ public class CommitmentRecorderWhatsAppMessageService extends WhatsAppMessageSer
         return commitmentRepository
                 .findByParticipantNumberAndToBeCompletedAtAfter(
                         message.participantMobileNumber(),
-                        Instant.now(clock));
+                        message.sentAt());
     }
 
     private String getHistorySnapshot(Collection<WhatsAppMessage> historyMessages) {
