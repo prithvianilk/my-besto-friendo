@@ -82,7 +82,7 @@ public class CommitmentRecorderWhatsAppMessageService extends WhatsAppMessageSer
 
         switch (response.type()) {
             case CREATE -> createCommitment(message, commitment);
-            case CHANGE -> updateCommitment(response, commitment);
+            case CHANGE -> updateCommitment(new UpdateCommitmentRequest(message, response, commitment));
             case CANCEL -> cancelCommitment(response, commitment);
         }
     }
@@ -143,7 +143,7 @@ public class CommitmentRecorderWhatsAppMessageService extends WhatsAppMessageSer
     }
 
     private void createCommitment(WhatsAppMessage message, Commitment commitment) {
-        CalendarEvent calendarEvent = calendarEventMapper.toCalendarEvent(commitment);
+        CalendarEvent calendarEvent = calendarEventMapper.toCalendarEvent(commitment, message.participantName());
         String eventId = calendarEventService.createEvent(calendarEvent);
         CommitmentEntity entity = commitmentMapper.toEntity(commitment, message.participantMobileNumber(), eventId);
         entity = commitmentRepository.save(entity);
@@ -154,19 +154,20 @@ public class CommitmentRecorderWhatsAppMessageService extends WhatsAppMessageSer
                 .success(true));
     }
 
-    private void updateCommitment(CommitmentActionResponse response, Commitment commitment) {
-        if (Objects.isNull(response.id())) {
+    private void updateCommitment(UpdateCommitmentRequest request) {
+        if (Objects.isNull(request.response().id())) {
             enrich(CommitmentManagementContext.builder()
                     .success(false)
-                    .commitmentDescription(commitment.description())
+                    .commitmentDescription(request.commitment().description())
                     .failureReason("ID is required for CHANGE action"));
             return;
         }
 
-        commitmentRepository.findById(response.id()).ifPresentOrElse(
+        commitmentRepository.findById(request.response().id()).ifPresentOrElse(
                 existingCommitment -> {
-                    updateCommitmentEntity(existingCommitment, commitment);
-                    CalendarEvent calendarEvent = calendarEventMapper.toCalendarEvent(commitment);
+                    updateCommitmentEntity(existingCommitment, request.commitment());
+                    CalendarEvent calendarEvent = calendarEventMapper.toCalendarEvent(
+                            request.commitment(), request.message().participantName());
                     String newCalendarEventId = calendarEventService
                             .updateEvent(existingCommitment.getCalendarEventId(), calendarEvent);
                     existingCommitment.setCalendarEventId(newCalendarEventId);
@@ -178,7 +179,7 @@ public class CommitmentRecorderWhatsAppMessageService extends WhatsAppMessageSer
                 },
                 () -> enrich(CommitmentManagementContext.builder()
                         .success(false)
-                        .commitmentId(response.id())
+                        .commitmentId(request.response().id())
                         .failureReason("Not found with ID")));
     }
 
@@ -316,4 +317,9 @@ public class CommitmentRecorderWhatsAppMessageService extends WhatsAppMessageSer
                 """
                 .formatted(futureCommitmentsSnapshot, messageSnapshot);
     }
+
+    private record UpdateCommitmentRequest(
+            WhatsAppMessage message,
+            CommitmentActionResponse response,
+            Commitment commitment) {}
 }
