@@ -1,5 +1,5 @@
 {
-    "whitelistedParticipantMobileNumbers": [
-        "+919876543210"
+    "whitelistedParticipants": [
+        { "mobileNumber": "9876543210", "name": "John Doe" }
     ]
 }

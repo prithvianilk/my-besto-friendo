@@ -1,8 +1,15 @@
 import { readFileSync, existsSync } from 'fs';
 import z from 'zod';
 
+const WhitelistedParticipant = z.object({
+    mobileNumber: z.string(),
+    name: z.string(),
+});
+
+export type WhitelistedParticipant = z.infer<typeof WhitelistedParticipant>;
+
 const ConfigSchema = z.object({
-    whitelistedParticipantMobileNumbers: z.array(z.string()),
+    whitelistedParticipants: z.array(WhitelistedParticipant),
 });
 
 type Config = z.infer<typeof ConfigSchema>;

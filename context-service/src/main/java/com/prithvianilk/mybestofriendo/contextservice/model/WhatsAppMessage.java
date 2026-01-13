@@ -4,6 +4,7 @@ import java.time.Instant;
 
 public record WhatsAppMessage(
     String participantMobileNumber,
+    String participantName,
     String senderName,
     boolean fromMe,
     String content,

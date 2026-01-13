@@ -3,6 +3,10 @@
 ## Comments
 - Prevent adding comments unless asked for. Don't add comments to explain the code, instead write meaningful method names and variable names that explain the intent.
 
+## General coding standards
+
+- Methods/functions with 3 or more parameters are a code smell. Use a DTO/record/object to group related parameters instead.
+
 ## Java writing standards
 
 - Use java.lang.Objects's isNull and nonNull instead of null checks based on '=' operator

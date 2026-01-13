@@ -1,10 +1,11 @@
 import type { BaileysEventMap } from 'baileys';
 import { MessageProducer } from './producer.js';
 import z from 'zod';
-import { config } from './config.js';
+import { config, WhitelistedParticipant } from './config.js';
 
 export const Message = z.object({
     participantMobileNumber: z.string(),
+    participantName: z.string(),
     senderName: z.string(),
     fromMe: z.boolean(),
     content: z.string(),
@@ -13,8 +14,8 @@ export const Message = z.object({
 
 export type Message = z.infer<typeof Message>;
 
-function isWhitelisted(participantMobileNumber: string): boolean {
-    return config.whitelistedParticipantMobileNumbers.includes(participantMobileNumber);
+function getWhitelistedParticipant(participantMobileNumber: string): WhitelistedParticipant | undefined {
+    return config.whitelistedParticipants.find(p => p.mobileNumber === participantMobileNumber);
 }
 
 export async function handleMessagesUpsert(
@@ -35,7 +36,8 @@ export async function handleMessagesUpsert(
             const regularMessageContent = rawMessage.message?.conversation;
             const content = (replyMessageContent || regularMessageContent)!;
 
-            if (!isWhitelisted(participantMobileNumber)) {
+            const whitelistedParticipant = getWhitelistedParticipant(participantMobileNumber);
+            if (!whitelistedParticipant) {
                 console.log(`Skipping message from non-whitelisted number: ${participantMobileNumber}, sender name: ${senderName}`);
                 return;
             }
@@ -43,6 +45,7 @@ export async function handleMessagesUpsert(
             try {
                 const message = Message.parse({
                     participantMobileNumber,
+                    participantName: whitelistedParticipant.name,
                     senderName,
                     fromMe,
                     content,
